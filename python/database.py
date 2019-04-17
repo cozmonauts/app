@@ -21,8 +21,8 @@ def loadStudents():
 
     if retrieveAll is not None:
         for studentPairs in retrieveAll:
-            print(studentPairs)
-            #return studentPairs
+            #print(studentPairs)
+            return (studentPairs)
 
 # If studentID not seen by cosmo, insert new student with their name and imageID;
 # Returns 'Studentid'
@@ -39,8 +39,8 @@ def insertNewStudent(studentName, imageID):
     if fetchID is not None:
        for x in fetchID:
             print("Returning Student's ID..")
-            print (x[0]) #will return studentID number ? switch orint with return
-            #return(x[0])
+            #print (x[0]) #will return studentID number ? switch orint with return
+            return(x[0])
             
 # If studentID seen by cozmo before, update the Date_seen
 def checkForStudent(studentID):
@@ -79,8 +79,8 @@ def listStudentIDs():
 
     if retrieveAll is not None:
         for studID in retrieveAll:
-            print(studID[0])
-            #return studentPairs[0]
+            #print(studID[0])
+            return (studentPairs[0])
 
 # Based on 'Studentid' list the name and date last seen of that student
 def determineStudent(studentID):
