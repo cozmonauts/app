@@ -2,10 +2,9 @@ import cozmo
 from cozmo.util import degrees, radians, distance_mm, speed_mmps
 #from cozmo.objects import LightCube1Id, LightCube2Id, LightCube3Id
 
-#import asyncio
+import asyncio
 import time
 import math
-#from . import util
 
 # Choose on which side of the charger (when facing it), Cozmo should put its cubes.
 # SIDE = 1 (left), SIDE = -1 (right)
@@ -321,20 +320,13 @@ def init_robot(cozmo_robot: cozmo.robot.Robot):
     robot = cozmo_robot
 
 def execute_procedure():
-    low_battery = check_battery()
-    if not low_battery:
-        get_on_charger()#clean_up_cubes() #search for faces!!!!
+
     get_on_charger()
     return
 
 def cozmo_program(cozmo_robot: cozmo.robot.Robot):
     global robot
     init_robot(cozmo_robot)
-
-    # Get off charger if on it
-    if(robot.is_on_charger):
-    	robot.drive_off_charger_contacts().wait_for_completed()
-    	robot.drive_straight(distance_mm(110),speed_mmps(80)).wait_for_completed()
 
     execute_procedure()
     return
