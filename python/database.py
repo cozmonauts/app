@@ -90,7 +90,17 @@ def determineStudent(studentID):
     if obtainName is not None:
         for x , y in obtainName:
             print("Student with ID = ",studentID, "is ", x, "and date last seen is", y)
-           
+
+#Return name of student who was seen most recently           
+def returnStudentName():
+    select = """SELECT Name FROM Students WHERE Date_seen = (SELECT MAX(Date_seen) FROM Students)"""
+    myCursor.execute(select)
+    returnName = myCursor.fetchall()
+    if returnName is not None:
+        for x in returnName:
+            #print(x[0])
+            return(x[0])        
+
 #store face as base 64 text string? = 'text' data type(pretty large numbers)
 if __name__ == "__main__":
 
