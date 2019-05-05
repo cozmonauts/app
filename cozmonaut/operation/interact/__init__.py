@@ -489,6 +489,9 @@ class OperationInteract(AbstractOperation):
             print(f'Look for charger (round {rnd})')
             rnd += 1
 
+            # Remember the robot pose before looking around
+            pose_before = robot.pose
+
             # Start to look around at the surroundings
             # The Cozmo app will pick up on any visible charger
             behave = robot.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace)
@@ -505,6 +508,9 @@ class OperationInteract(AbstractOperation):
             # Stop looking around
             # We may or may not have seen a charger
             behave.stop()
+
+            # Go back to the pose before looking around
+            await robot.go_to_pose(pose_before).wait_for_completed()
 
             # If we saw a charger, use that one
             if seen_charger is not None:
