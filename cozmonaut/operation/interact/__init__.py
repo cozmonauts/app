@@ -7,7 +7,6 @@ import asyncio
 import math
 import random
 from enum import Enum
-from pprint import pprint
 from threading import Thread
 
 import cozmo
@@ -363,8 +362,9 @@ class OperationInteract(AbstractOperation):
                     # Add finishing touches to our staging
                     await self._driver_go_to_charger_fine(robot)
 
-                    # Face away from the charger
-                    await robot.turn_in_place(cozmo.util.degrees(180)).wait_for_completed()
+                    # Face away from the charger (very precisely)
+                    await robot.turn_in_place(cozmo.util.degrees(180),
+                                              angle_tolerance=cozmo.util.degrees(2)).wait_for_completed()
 
                     # Point head forward-ish and lift lift out of way of charger
                     await robot.set_lift_height(height=0.5, max_speed=10, in_parallel=True).wait_for_completed()
@@ -374,7 +374,7 @@ class OperationInteract(AbstractOperation):
                     print('The robot will try to strike the base of the charger')
 
                     # Start driving backward pretty quickly
-                    robot.drive_wheel_motors(-50, -50)
+                    robot.drive_wheel_motors(-60, -60)
 
                     # Timeout and elapsed time for strike phase
                     timeout = 3
@@ -398,12 +398,15 @@ class OperationInteract(AbstractOperation):
                     # Striking done, stop motors
                     robot.stop_all_motors()
 
+                    # Wait a little
+                    await asyncio.sleep(0.5)
+
                     print('Begin flattening phase')
                     print('The robot will try to flatten out on the charger')
 
-                    # Start driving backward pretty slowly
+                    # Start driving backward a little slower
                     # We want to avoid driving up onto the back wall of the charger
-                    robot.drive_wheel_motors(-15, -15)
+                    robot.drive_wheel_motors(-35, -35)
 
                     # Timeout and elapsed time for flattening phase
                     timeout = 5
@@ -429,6 +432,9 @@ class OperationInteract(AbstractOperation):
 
                     # Flattening done, stop motors
                     robot.stop_all_motors()
+
+                    # Wait a little
+                    await asyncio.sleep(0.5)
 
                     # Lower lift and nestle in
                     await robot.set_lift_height(height=0, max_speed=10, in_parallel=True).wait_for_completed()
@@ -464,8 +470,6 @@ class OperationInteract(AbstractOperation):
                     self._active_robot = 0
 
                     print(f'Driver indicates Cozmo {"A" if index == 1 else "B"} (robot #{index}) is done returning')
-
-                    pprint(self)
 
             # Yield control
             await asyncio.sleep(0)
@@ -646,8 +650,6 @@ class OperationInteract(AbstractOperation):
         print('Governor started')
 
         while not (self.stopped and self._active_robot == 0):
-            print('govern')
-
             # If no robot is currently active
             if self._active_robot == 0:
                 print(f'Robot {self._last_active_robot} is no longer active')
