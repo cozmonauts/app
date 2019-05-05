@@ -17,6 +17,7 @@ setup(
         'dlib',
         'mysql',
         'numpy',
+        'opencv-python',
         'pillow',
     ],
     include_package_data=True,

@@ -5,13 +5,13 @@
 
 import asyncio
 import math
-import random
 from enum import Enum
 from threading import Thread
 
 import cozmo
 
 from cozmonaut.operation import AbstractOperation
+from .face_tracker import FaceTracker
 
 
 class InteractMode(Enum):
@@ -55,12 +55,17 @@ class OperationInteract(AbstractOperation):
 
         # The interact thread
         # We use this to stay asynchronous
-        self._thread = None
+        self._thread: Thread = None
 
         # The robot instances
         # Each one corresponds to the real deal
-        self._robot_a = None
-        self._robot_b = None
+        self._robot_a: cozmo.robot.Robot = None
+        self._robot_b: cozmo.robot.Robot = None
+
+        # The face trackers
+        # Each one corresponds to an assigned robot
+        self._face_tracker_a: FaceTracker = None
+        self._face_tracker_b: FaceTracker = None
 
         # The active robot index
         # It can be 0 (none), 1 (Cozmo A), or 2 (Cozmo B)
@@ -249,6 +254,152 @@ class OperationInteract(AbstractOperation):
                 print('Cozmo B is missing, so refusing to continue')
                 return
 
+        print('Setting up face trackers')
+
+        # Create face trackers
+        self._face_tracker_a = FaceTracker()
+        self._face_tracker_b = FaceTracker()
+
+        # FIXME: Remove this
+        tyler_face = (
+            -0.103433,
+            0.0713784,
+            0.0813356,
+            -0.0747395,
+            -0.157589,
+            -0.0386992,
+            -0.0319699,
+            -0.00274016,
+            0.0867231,
+            -0.0220311,
+            0.242471,
+            0.0148122,
+            -0.252416,
+            -0.0551133,
+            -0.0037139,
+            0.0990293,
+            -0.113765,
+            -0.0226992,
+            -0.0938466,
+            -0.0400318,
+            0.126524,
+            0.102942,
+            0.0550079,
+            0.0616467,
+            -0.145211,
+            -0.260875,
+            -0.105383,
+            -0.0524487,
+            0.00731247,
+            -0.135143,
+            0.0509941,
+            0.124918,
+            -0.109638,
+            -0.0350157,
+            0.0340424,
+            0.0950269,
+            -0.0593138,
+            -0.0289018,
+            0.215726,
+            -0.0228096,
+            -0.149361,
+            0.0423131,
+            0.0110523,
+            0.264083,
+            0.194999,
+            0.0382402,
+            0.0235397,
+            -0.0508239,
+            0.100998,
+            -0.320135,
+            0.0635357,
+            0.134587,
+            0.0839489,
+            0.050831,
+            0.0836643,
+            -0.125788,
+            0.0253968,
+            0.212677,
+            -0.222989,
+            0.0768562,
+            -0.0297501,
+            -0.215015,
+            -0.0410392,
+            -0.110664,
+            0.166501,
+            0.0996042,
+            -0.129823,
+            -0.148502,
+            0.147683,
+            -0.152009,
+            -0.145286,
+            0.145061,
+            -0.140681,
+            -0.147379,
+            -0.37368,
+            0.0436715,
+            0.353895,
+            0.153631,
+            -0.225468,
+            0.0191243,
+            -0.01694,
+            0.0200662,
+            0.0228013,
+            0.0611707,
+            -0.0946287,
+            -0.0709029,
+            -0.121012,
+            0.0488099,
+            0.17418,
+            -0.0588228,
+            -0.0645145,
+            0.26763,
+            0.092387,
+            0.115437,
+            0.0444944,
+            0.0116651,
+            -0.00945554,
+            -0.0874052,
+            -0.132031,
+            0.0409098,
+            0.0522451,
+            -0.105967,
+            -0.020343,
+            0.127948,
+            -0.15351,
+            0.168118,
+            -0.0352881,
+            -0.045533,
+            -0.0601219,
+            -0.0499158,
+            -0.139128,
+            0.0365747,
+            0.188973,
+            -0.290735,
+            0.218931,
+            0.203897,
+            0.0409592,
+            0.125365,
+            0.0873372,
+            0.0437877,
+            -0.0335225,
+            -0.054352,
+            -0.145829,
+            -0.065083,
+            0.144216,
+            -0.0487921,
+            0.0604078,
+            0.0337079
+        )
+        self._face_tracker_a.add_identity(42, tyler_face)
+        self._face_tracker_b.add_identity(42, tyler_face)
+
+        # TODO: Load from the database
+
+        # Start the face trackers
+        self._face_tracker_a.start()
+        self._face_tracker_b.start()
+
         print('Beginning interactive procedure')
 
         print('+-----------------------------------------------------------------+')
@@ -271,6 +422,14 @@ class OperationInteract(AbstractOperation):
         # Run the event loop until it stops (it's not actually forever)
         loop.run_forever()
 
+        print('Tearing down face trackers')
+
+        # TODO: Save to the database
+
+        # Stop the trackers
+        self._face_tracker_a.stop()
+        self._face_tracker_b.stop()
+
         print('Goodbye!')
 
     async def _driver(self, index: int, robot: cozmo.robot.Robot):
@@ -286,7 +445,10 @@ class OperationInteract(AbstractOperation):
         print(f'Driver started for Cozmo {"A" if index == 1 else "B"} (robot #{index})')
 
         # Sub-coroutines
-        sub = asyncio.gather(self._watch_battery(index, robot))
+        sub = asyncio.gather(
+            self._watch_battery(index, robot),
+            self._watch_faces(index, robot),
+        )
 
         # The waypoint pose
         waypoint: cozmo.util.Pose = None
@@ -643,6 +805,20 @@ class OperationInteract(AbstractOperation):
         else:
             print('Did not align successfully')  # TODO: Should retry
 
+    @staticmethod
+    def _util_wrap_radians(angle: float):
+        while angle >= 2 * math.pi:
+            angle -= 2 * math.pi
+        while angle <= -2 * math.pi:
+            angle += 2 * math.pi
+
+        if angle > math.pi:
+            angle -= 2 * math.pi
+        elif angle < -math.pi:
+            angle += 2 * math.pi
+
+        return angle
+
     async def _governor(self):
         """
         The governor is responsible for commanding the endeavor. It decides
@@ -727,27 +903,30 @@ class OperationInteract(AbstractOperation):
                     # Clear pending test flag
                     self._pending_low_battery_test = False
 
-                if random.randrange(5) == 0:
-                    self._pending_low_battery_test = True  # FIXME
-
             # Sleep for a bit
-            await asyncio.sleep(3)
+            await asyncio.sleep(3)  # TODO: Wait for however long
 
         print(f'Battery watcher for Cozmo {"A" if index == 1 else "B"} (robot #{index}) stopping')
 
-    @staticmethod
-    def _util_wrap_radians(angle: float):
-        while angle >= 2 * math.pi:
-            angle -= 2 * math.pi
-        while angle <= -2 * math.pi:
-            angle += 2 * math.pi
+    async def _watch_faces(self, index: int, robot: cozmo.robot.Robot):
+        """
+        A face watcher for a single Cozmo robot.
 
-        if angle > math.pi:
-            angle -= 2 * math.pi
-        elif angle < -math.pi:
-            angle += 2 * math.pi
+        :param index: The robot index (1=A, 2=B)
+        :param robot: The robot instance
+        """
 
-        return angle
+        print(f'Face watcher started for Cozmo {"A" if index == 1 else "B"} (robot #{index})')
+
+        while not self.stopped:
+            # If this robot is active (implies non charging)
+            if self._active_robot == index:
+                pass
+
+            # Sleep for a bit
+            await asyncio.sleep(1)  # TODO: Wait for however long
+
+        print(f'Face watcher for Cozmo {"A" if index == 1 else "B"} (robot #{index}) stopping')
 
 
 # Do not leave the charger automatically
