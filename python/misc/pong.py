@@ -90,4 +90,5 @@ def kinvert_pong(robot: cozmo.robot.Robot):
         else:
             time.sleep(0.01)
 
-#cozmo.run_program(kinvert_pong)
+
+cozmo.run_program(kinvert_pong)

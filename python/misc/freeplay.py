@@ -12,6 +12,6 @@ def test(robot: cozmo.robot.Robot):
     time.sleep(5)
     robot.go_to_pose(waypoint).wait_for_completed()
 
-    
+
 cozmo.run_program(test)
 
