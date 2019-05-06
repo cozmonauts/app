@@ -45,7 +45,18 @@ int main(int argc, char* argv[]) {
 
   sleep(5);
 
+  // Request to start watching faces
+  service_call(SERVICE_PYTHON, service_python_fn_interact_manual_req_diversion_faces, NULL, NULL);
+
+  sleep(10);
+
+  // Enable automatic mode
   service_call(SERVICE_PYTHON, service_python_fn_interact_manual_return, NULL, NULL);
+  service_call(SERVICE_PYTHON, service_python_fn_interact_auto_enable, NULL, NULL);
+
+  sleep(40);
+
+  service_call(SERVICE_PYTHON, service_python_fn_interact_test_low_battery, NULL, NULL);
 
   // Wait for ^C
   signal(SIGINT, &sigint);

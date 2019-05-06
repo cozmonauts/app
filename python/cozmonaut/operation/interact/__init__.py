@@ -12,6 +12,7 @@ from enum import Enum
 from threading import Thread
 from typing import Tuple
 
+import base
 import cozmo
 
 import cozmonaut.operation.interact.database
@@ -52,8 +53,8 @@ class OperationInteract(AbstractOperation):
         # The Cozmo SDK makes connections non-deterministically
         # One day the left Cozmo might be A, another it might be B
         # By supplying serial numbers, we can take control of this
-        self._wanted_serial_a = args.get('ser-a', '45a18821')  # These are actual serial numbers
-        self._wanted_serial_b = args.get('ser-b', '0241c714')  # These are actual serial numbers
+        self._wanted_serial_a = args.get('ser-a', '0241c714')  # These are actual serial numbers
+        self._wanted_serial_b = args.get('ser-b', '45a18821')  # These are actual serial numbers
 
         # Grab the mode of interaction from arguments
         self._mode = InteractMode[args.get('mode', 'both')]
@@ -132,7 +133,7 @@ class OperationInteract(AbstractOperation):
 
     def auto_enable(self):
         """
-        Called to enable automatic interaction.
+        Called from C to enable automatic interaction.
         """
 
         print('Enabling automatic mode')
@@ -142,35 +143,48 @@ class OperationInteract(AbstractOperation):
 
     def auto_disable(self):
         """
-        Called to disable automatic interaction.
+        Called from C to disable automatic interaction.
         """
 
         print('Disabling automatic mode')
+        print('NOTE: You must still bring the robot back to the charger manually')  # FIXME: Should this be the case?
 
         # Clear automatic flag
         self._automatic = False
 
+    def test_low_battery(self):
+        """
+        Called from C to test the low battery condition.
+        """
+
+        print('Testing low battery condition')
+
+        # Set low battery test flag
+        self._pending_low_battery_test = True
+
     def manual_advance(self):
         """
-        Called to manually advance.
+        Called from C to manually advance from charger.
         """
 
-        print('Manually requesting advance')
+        print('Manually requesting advance from charger')
 
+        # Set pending advance flag
         self._pending_advance_from_charger = True
 
     def manual_return(self):
         """
-        Called to manually return.
+        Called from C to manually return to charger.
         """
 
-        print('Manually requesting return')
+        print('Manually requesting return to charger')
 
+        # Set pending return flag
         self._pending_return_to_charger = True
 
     def manual_req_diversion_faces(self):
         """
-        Called to manually request faces diversion.
+        Called from C to manually request faces diversion.
         """
 
         print('Manually requesting faces diversion')
@@ -180,7 +194,7 @@ class OperationInteract(AbstractOperation):
 
     def manual_req_diversion_converse(self):
         """
-        Called to manually request converse diversion.
+        Called from C to manually request converse diversion.
         """
 
         print('Manually requesting converse diversion')
@@ -190,7 +204,7 @@ class OperationInteract(AbstractOperation):
 
     def manual_req_diversion_wander(self):
         """
-        Called to manually request wander diversion.
+        Called from C to manually request wander diversion.
         """
 
         print('Manually requesting wander diversion')
@@ -424,11 +438,18 @@ class OperationInteract(AbstractOperation):
         robot.camera.add_event_handler(cozmo.robot.camera.EvtNewRawCameraImage,
                                        functools.partial(self._driver_on_evt_new_raw_camera_image, index, robot))
 
-        # Sub-coroutines
+        # Schedule our per-Cozmo coroutines
         sub = asyncio.gather(
+            # The watcher coroutines
+            # These watch sensors and respond to them
             self._watch_battery(index, robot),
             self._watch_faces(index, robot),
+
+            # The diversion coroutines
+            # These respond to our requests for diversions
             self._diversion_faces(index, robot),
+            self._diversion_converse(index, robot),
+            self._diversion_wander(index, robot),
         )
 
         # The waypoint pose
@@ -874,6 +895,58 @@ class OperationInteract(AbstractOperation):
             # Yield control
             await asyncio.sleep(0)
 
+    async def _diversion_converse(self, index: int, robot: cozmo.robot.Robot):
+        """
+        The converse diversion.
+
+        :param index: The robot index
+        :param robot: The robot instance
+        """
+
+        while not self.stopped:
+            # Yield while not stopping and converse diversion is not requested for this robot
+            while not self.stopped and not (self._active_robot == index and self._req_diversion_converse):
+                await asyncio.sleep(0)
+
+            print('Engaging converse diversion')
+
+            # TODO: Do the conversation
+            #  We have access to robot A and B objects at this point
+            #  We also have a "robot" object which is the current robot off the charger
+            #  You can compare it against the A and B objects to set up the conversation as needed
+            #  Maybe some phrases depend on where at the robots are?
+            await asyncio.sleep(5)
+
+            print('Disengaging converse diversion')
+
+            # Yield control
+            await asyncio.sleep(0)
+
+    async def _diversion_wander(self, index: int, robot: cozmo.robot.Robot):
+        """
+        The wander diversion.
+
+        :param index: The robot index
+        :param robot: The robot instance
+        """
+
+        while not self.stopped:
+            # Yield while not stopping and wander diversion is not requested for this robot
+            while not self.stopped and not (self._active_robot == index and self._req_diversion_wander):
+                await asyncio.sleep(0)
+
+            print('Engaging wander diversion')
+
+            # TODO: Do the wandering
+            #  Make sure to disable it before letting this loop iteration die
+            #  You do not need to go back to the waypoint afterwards, though, as the return code does that
+            await asyncio.sleep(5)
+
+            print('Disengaging wander diversion')
+
+            # Yield control
+            await asyncio.sleep(0)
+
     async def _governor(self):
         """
         The governor is responsible for commanding the endeavor. It decides
@@ -1074,8 +1147,10 @@ class OperationInteract(AbstractOperation):
                     elif num == 2:
                         await robot.say_text('Please say your name.').wait_for_completed()
 
-                    # TODO: Get this from either speech rec or the command-line
-                    name = 'Bob'
+                    # Get the name of the face
+                    # This is implemented as either speech recognition or console input
+                    # Whichever one is used depends on user preferences
+                    name = base.get_name()
 
                     # Encode the identity to a string for storage in the database
                     face_ident_enc = self._face_ident_encode(face_ident)

@@ -29,6 +29,9 @@ enum service_python_fn {
   /** Disable automatic interaction. */
   service_python_fn_interact_auto_disable,
 
+  /** Test low battery condition. Works in manual and automatic modes. */
+  service_python_fn_interact_test_low_battery,
+
   /** Manual mode. Advance the active Cozmo from the charger. */
   service_python_fn_interact_manual_advance,
 
