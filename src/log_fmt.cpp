@@ -103,8 +103,9 @@ void log__temp_format_and_submit(log_form* form) {
   // Format the message with these arguments
   auto msg = fmt::vformat(form->msg_fmt, args);
 
-  // Print the whole thing to standard out for now
-  fmt::print("{} [{}] {}\n", log_level_name(form->level), form->tag, msg);
+  // Print the whole thing to standard error for now
+  // This is so the output doesn't collide too badly with console input
+  fmt::print(stderr, "{} [{}] {}\n", log_level_name(form->level), form->tag, msg);
 }
 
 } // extern "C"
