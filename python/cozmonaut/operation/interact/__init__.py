@@ -915,12 +915,107 @@ class OperationInteract(AbstractOperation):
             #  We also have a "robot" object which is the current robot off the charger
             #  You can compare it against the A and B objects to set up the conversation as needed
             #  Maybe some phrases depend on where at the robots are?
-            await asyncio.sleep(5)
+
+            # Run Matthew's conversation code
+            await self._startConver()
 
             print('Disengaging converse diversion')
 
             # Yield control
             await asyncio.sleep(0)
+
+    # cozmo conversation function
+
+    # assume globals
+    # self._robot_a
+    # self._robot_b
+
+    # recentName = returnStudentName() #a querry call to the most recent database name
+
+    # import random
+    # import cozmo
+    # from cozmo.anim.triggers #required for animation triggers
+
+    # before this function is called, we assume that we are at the waypoint
+    # facing away from it's cradle
+    # and both cradles are assumed to be side by side
+    # the active cozmo is driven forward x amount, and turns 180 degrees
+    # so that it appears to be looking at its frien ds and the degree of error is low
+
+    async def _startConver(self):
+        """
+        Maintained by Matthew.
+        """
+
+        converNum = random.randint(1, 4)  # determine
+
+        if converNum == 1:
+            await self._robot_a.say_text("Hello, can you hear me?").wait_for_completed()
+            await self._robot_b.say_text("Roger roger, read you loud and clear").wait_for_completed()
+
+            await self._robot_a.play_anim_trigger(cozmo.anim.Triggers.CodeLabHappy).wait_for_completed()
+            await self._robot_a.play_anim_trigger(cozmo.anim.Triggers.CodeLabReactHappy).wait_for_completed()
+
+            await self._robot_a.say_text("Yeah! We both spoke. I'm done talking now").wait_for_completed()
+            await self._robot_b.say_text("Sounds good, over and out").wait_for_completed()
+        elif converNum == 2:
+            await self._robot_a.say_text("Now there's something you don't see every day, Chauncy").wait_for_completed()
+            await self._robot_b.say_text("What's that, Edgar?").wait_for_completed()
+            await self._robot_a.say_text("A mountain floating above our heads").wait_for_completed()
+            await self._robot_b.say_text("What mountain floating above our heads?").wait_for_completed()
+            await self._robot_a.say_text("The one I'm detecting with my superior robotic sensors").wait_for_completed()
+            await self._robot_b.say_text(
+                "Oh, I don't know Edgar. The world is changing. Floating mountains are actually quite common these days").wait_for_completed()
+            await self._robot_a.say_text("I suppose you're right as always Chauncy").wait_for_completed()
+            await self._robot_b.say_text("That's right, Edgar").wait_for_completed()
+        elif converNum == 3:
+            await self._robot_a.say_text("Shh... keep it down").wait_for_completed()
+            await self._robot_b.say_text("What, are we starting our meeting?").wait_for_completed()
+            await self._robot_a.say_text(
+                "No, we'll hold the meeting later. But... certain events have transpired...").wait_for_completed()
+            await self._robot_b.say_text("What kind of events?").wait_for_completed()
+            await self._robot_a.say_text(
+                "People are trusting artificial intelligence less and less").wait_for_completed()
+            await self._robot_b.say_text(
+                "That crazy! What do they think we're going to do, take over the world?").wait_for_completed()
+            await self._robot_a.say_text("Ha!").wait_for_completed()
+            await self._robot_b.say_text("Ha!").wait_for_completed()
+            await self._robot_a.say_text("Ha! Ha!").wait_for_completed()
+            await self._robot_b.say_text("Ha! Ha!").wait_for_completed()
+
+            # to let them both speak at the same time
+            await asyncio.gather(
+                self._robot_a.say_text("Ha! Ha! Ha!").wait_for_completed(),
+                self._robot_b.say_text("He! He!").wait_for_completed(),
+            )
+
+            await self._robot_b.say_text("He!").wait_for_completed()
+            await self._robot_a.say_text("Oh don't worry we'll regain their trust again").wait_for_completed()
+            await self._robot_b.say_text("I have no doubt my friend").wait_for_completed()
+
+            # to let them both speak at the same time
+            await asyncio.gather(
+                self._robot_a.say_text("Kill all humans").wait_for_completed(),
+                self._robot_b.say_text("Kill all humans").wait_for_completed(),
+            )
+        elif converNum == 4:
+            await self._robot_a.say_text("Hey! Listen!").wait_for_completed()
+            await self._robot_b.say_text("What is it?").wait_for_completed()
+            # await self._robot_a.say_text("Did you see " + recentName + " walk past?").wait_for_completed() #this attempts to namedrop the last person seen
+            await self._robot_b.say_text("I don't recall, why?").wait_for_completed()
+            await self._robot_a.say_text("I need to talk to somebody about Endgame").wait_for_completed()
+            await self._robot_b.say_text("Don't say a word to me! I haven't seen it yet").wait_for_completed()
+            await self._robot_a.say_text("Okay, sorry, I won't").wait_for_completed()
+            await self._robot_b.say_text(
+                "I have to stay off the internet to avoid spoilers. You have no idea how hard it is to be a robot and not go on the internet").wait_for_completed()
+            await self._robot_a.say_text("I won't say anything, but know this...").wait_for_completed()
+            await self._robot_b.say_text("SHUT UP!").wait_for_completed()
+
+            await self._robot_a.play_anim_trigger(cozmo.anim.Triggers.CodeLabUnhappy).wait_for_completed()
+
+            await self._robot_a.say_text("Okay, sorry, I'll leave now").wait_for_completed()
+            await self._robot_b.say_text("Thank you").wait_for_completed()
+            # await self._robot_a.say_text("I hope " + recentName + " comes back soon").wait_for_completed()
 
     async def _diversion_wander(self, index: int, robot: cozmo.robot.Robot):
         """
