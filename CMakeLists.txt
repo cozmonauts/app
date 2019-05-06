@@ -17,6 +17,7 @@ set(cozmo_SRC_FILES
         src/log.c
         src/log_fmt.cpp
         src/main.c
+        src/service.c
         )
 
 add_executable(cozmo ${cozmo_SRC_FILES})
