@@ -8,7 +8,12 @@
 
 #include <linenoise.h>
 
-int main() {
+#include "global.h"
+
+int main(int argc, char* argv[]) {
+  g_mut->argc = argc;
+  g_mut->argv = (const char**) argv;
+
   char* line;
   while ((line = linenoise("C:\\> ")) != NULL) {
     if (line[0] != '\0') {
