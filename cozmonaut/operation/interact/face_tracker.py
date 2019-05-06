@@ -450,5 +450,5 @@ class FaceTracker:
         rec.index = index
         rec.coords = position
         rec.fid = best_match_fid
-        rec.ident = ident
+        rec.ident = tuple(ident)
         return rec

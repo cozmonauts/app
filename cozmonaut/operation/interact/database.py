@@ -25,9 +25,11 @@ def loadStudents():
     retrieveAll = myCursor.fetchall()
 
     if retrieveAll is not None:
+        pairs=[]  # NOTE(tyler): Keep a list
         for studentPairs in retrieveAll:
             #print(studentPairs)
-            return (studentPairs)
+            pairs.append(studentPairs)
+        return pairs
 
 # If studentID not seen by cosmo, insert new student with their name and imageID;
 # Returns 'Studentid'

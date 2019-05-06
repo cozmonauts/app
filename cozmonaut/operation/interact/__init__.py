@@ -5,10 +5,12 @@
 
 import asyncio
 import functools
+import json
 import math
 import random
 from enum import Enum
 from threading import Thread
+from typing import Tuple
 
 import cozmo
 
@@ -275,148 +277,24 @@ class OperationInteract(AbstractOperation):
         self._face_tracker_a = FaceTracker()
         self._face_tracker_b = FaceTracker()
 
-        # FIXME: Remove this
-        tyler_face = (
-            -0.103433,
-            0.0713784,
-            0.0813356,
-            -0.0747395,
-            -0.157589,
-            -0.0386992,
-            -0.0319699,
-            -0.00274016,
-            0.0867231,
-            -0.0220311,
-            0.242471,
-            0.0148122,
-            -0.252416,
-            -0.0551133,
-            -0.0037139,
-            0.0990293,
-            -0.113765,
-            -0.0226992,
-            -0.0938466,
-            -0.0400318,
-            0.126524,
-            0.102942,
-            0.0550079,
-            0.0616467,
-            -0.145211,
-            -0.260875,
-            -0.105383,
-            -0.0524487,
-            0.00731247,
-            -0.135143,
-            0.0509941,
-            0.124918,
-            -0.109638,
-            -0.0350157,
-            0.0340424,
-            0.0950269,
-            -0.0593138,
-            -0.0289018,
-            0.215726,
-            -0.0228096,
-            -0.149361,
-            0.0423131,
-            0.0110523,
-            0.264083,
-            0.194999,
-            0.0382402,
-            0.0235397,
-            -0.0508239,
-            0.100998,
-            -0.320135,
-            0.0635357,
-            0.134587,
-            0.0839489,
-            0.050831,
-            0.0836643,
-            -0.125788,
-            0.0253968,
-            0.212677,
-            -0.222989,
-            0.0768562,
-            -0.0297501,
-            -0.215015,
-            -0.0410392,
-            -0.110664,
-            0.166501,
-            0.0996042,
-            -0.129823,
-            -0.148502,
-            0.147683,
-            -0.152009,
-            -0.145286,
-            0.145061,
-            -0.140681,
-            -0.147379,
-            -0.37368,
-            0.0436715,
-            0.353895,
-            0.153631,
-            -0.225468,
-            0.0191243,
-            -0.01694,
-            0.0200662,
-            0.0228013,
-            0.0611707,
-            -0.0946287,
-            -0.0709029,
-            -0.121012,
-            0.0488099,
-            0.17418,
-            -0.0588228,
-            -0.0645145,
-            0.26763,
-            0.092387,
-            0.115437,
-            0.0444944,
-            0.0116651,
-            -0.00945554,
-            -0.0874052,
-            -0.132031,
-            0.0409098,
-            0.0522451,
-            -0.105967,
-            -0.020343,
-            0.127948,
-            -0.15351,
-            0.168118,
-            -0.0352881,
-            -0.045533,
-            -0.0601219,
-            -0.0499158,
-            -0.139128,
-            0.0365747,
-            0.188973,
-            -0.290735,
-            0.218931,
-            0.203897,
-            0.0409592,
-            0.125365,
-            0.0873372,
-            0.0437877,
-            -0.0335225,
-            -0.054352,
-            -0.145829,
-            -0.065083,
-            0.144216,
-            -0.0487921,
-            0.0604078,
-            0.0337079
-        )
-        # self._face_tracker_a.add_identity(42, tyler_face)
-        # self._face_tracker_b.add_identity(42, tyler_face)
-
         print('Loading known faces from database')
 
-        # Known student information
+        # Query known faces from database
         known_faces = database.loadStudents()
 
+        # If there are known faces
         if known_faces is not None:
-            for (fid, ident) in known_faces:
-                print(f'{fid} -> {ident}')
+            # Loop through them
+            # We received their IDs and string-encoded identities from the database
+            for (fid, ident_enc) in known_faces:
+                # Decode string-encoded identity
+                # The result is a 128-tuple of 64-bit floats
+                ident = self._face_ident_decode(ident_enc)
+
+                # Register identity with both face trackers
+                # That way both Cozmos will be able to recognize the face
+                self._face_tracker_a.add_identity(fid, ident)
+                self._face_tracker_b.add_identity(fid, ident)
 
         # Start the face trackers
         self._face_tracker_a.start()
@@ -1118,8 +996,11 @@ class OperationInteract(AbstractOperation):
                     # TODO: Get this from either speech rec or the command-line
                     name = 'Bob'
 
+                    # Encode the identity to a string for storage in the database
+                    face_ident_enc = self._face_ident_encode(face_ident)
+
                     # Insert face into the database and get the assigned face ID (thanks Herman, this is easy to use)
-                    face_id = database.insertNewStudent(name, face_ident)
+                    face_id = database.insertNewStudent(name, face_ident_enc)
 
                     # Add identity to both Cozmo A and B face trackers
                     # This lets us recognize this face again in the same session
@@ -1159,6 +1040,34 @@ class OperationInteract(AbstractOperation):
             await asyncio.sleep(0)  # TODO: Should we sleep for longer?
 
         print(f'Face watcher for Cozmo {"A" if index == 1 else "B"} (robot #{index}) stopping')
+
+    @staticmethod
+    def _face_ident_decode(ident_enc: str) -> Tuple[float, ...]:
+        """
+        Decode a string-encoded face identity.
+
+        :param ident_enc: The encoded identity
+        :return: The decoded identity
+        """
+
+        # Load the 128-tuple of floats from JSON
+        ident = json.loads(ident_enc)
+
+        return ident
+
+    @staticmethod
+    def _face_ident_encode(ident: Tuple[float, ...]) -> str:
+        """
+        Encode a face identity to string.
+
+        :param ident: The decoded identity
+        :return: The encoded identity
+        """
+
+        # Dump the 128-tuple of floats into JSON
+        ident_json = json.dumps(ident)
+
+        return ident_json
 
 
 # Do not leave the charger automatically
