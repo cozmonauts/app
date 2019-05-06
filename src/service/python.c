@@ -51,6 +51,41 @@ static const char DRIVER_CODE_OP_INTERACT_STOP[] =
   "op = globals()['op']\n"
   "op.stop()\n";
 
+/** Driver code for enabling automatic interaction. */
+static const char DRIVER_CODE_AUTO_ENABLE[] =
+  "op = globals()['op']\n"
+  "op.auto_enable()\n";
+
+/** Driver code for disabling automatic interaction. */
+static const char DRIVER_CODE_AUTO_DISABLE[] =
+  "op = globals()['op']\n"
+  "op.auto_disable()\n";
+
+/** Driver code for requesting manual advance. */
+static const char DRIVER_CODE_MANUAL_ADVANCE[] =
+  "op = globals()['op']\n"
+  "op.manual_advance()\n";
+
+/** Driver code for requesting manual return. */
+static const char DRIVER_CODE_MANUAL_RETURN[] =
+  "op = globals()['op']\n"
+  "op.manual_return()\n";
+
+/** Driver code for requesting manual faces diversion. */
+static const char DRIVER_CODE_MANUAL_REQ_DIVERSION_FACES[] =
+  "op = globals()['op']\n"
+  "op.manual_req_diversion_faces()\n";
+
+/** Driver code for requesting manual converse diversion. */
+static const char DRIVER_CODE_MANUAL_REQ_DIVERSION_CONVERSE[] =
+  "op = globals()['op']\n"
+  "op.manual_req_diversion_converse()\n";
+
+/** Driver code for requesting manual wander diversion. */
+static const char DRIVER_CODE_MANUAL_REQ_DIVERSION_WANDER[] =
+  "op = globals()['op']\n"
+  "op.manual_req_diversion_wander()\n";
+
 /** The selected operation. */
 static enum service_python_op python__op;
 
@@ -1225,6 +1260,258 @@ static int python__proc_op_exec(const void* a, void* b) {
   return 0;
 }
 
+static int python__proc_auto_enable(const void* a, void* b) {
+  // Acquire GIL
+  PyEval_RestoreThread(python__thread_state);
+
+  // Import the __main__ module (borrowed reference)
+  PyObject* main = PyImport_AddModule("__main__");
+  if (!main) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Get main module dictionary (borrowed reference)
+  PyObject* dict = PyModule_GetDict(main);
+  if (!dict) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Run the Python code
+  if (!PyRun_String(DRIVER_CODE_AUTO_ENABLE, Py_file_input, dict, dict)) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Release GIL
+  python__thread_state = PyEval_SaveThread();
+
+  return 0;
+}
+
+static int python__proc_auto_disable(const void* a, void* b) {
+  // Acquire GIL
+  PyEval_RestoreThread(python__thread_state);
+
+  // Import the __main__ module (borrowed reference)
+  PyObject* main = PyImport_AddModule("__main__");
+  if (!main) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Get main module dictionary (borrowed reference)
+  PyObject* dict = PyModule_GetDict(main);
+  if (!dict) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Run the Python code
+  if (!PyRun_String(DRIVER_CODE_AUTO_DISABLE, Py_file_input, dict, dict)) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Release GIL
+  python__thread_state = PyEval_SaveThread();
+
+  return 0;
+}
+
+static int python__proc_manual_advance(const void* a, void* b) {
+  // Acquire GIL
+  PyEval_RestoreThread(python__thread_state);
+
+  // Import the __main__ module (borrowed reference)
+  PyObject* main = PyImport_AddModule("__main__");
+  if (!main) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Get main module dictionary (borrowed reference)
+  PyObject* dict = PyModule_GetDict(main);
+  if (!dict) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Run the Python code
+  if (!PyRun_String(DRIVER_CODE_MANUAL_ADVANCE, Py_file_input, dict, dict)) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Release GIL
+  python__thread_state = PyEval_SaveThread();
+
+  return 0;
+}
+
+static int python__proc_manual_return(const void* a, void* b) {
+  // Acquire GIL
+  PyEval_RestoreThread(python__thread_state);
+
+  // Import the __main__ module (borrowed reference)
+  PyObject* main = PyImport_AddModule("__main__");
+  if (!main) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Get main module dictionary (borrowed reference)
+  PyObject* dict = PyModule_GetDict(main);
+  if (!dict) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Run the Python code
+  if (!PyRun_String(DRIVER_CODE_MANUAL_RETURN, Py_file_input, dict, dict)) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Release GIL
+  python__thread_state = PyEval_SaveThread();
+
+  return 0;
+}
+
+static int python__proc_manual_req_diversion_faces(const void* a, void* b) {
+  // Acquire GIL
+  PyEval_RestoreThread(python__thread_state);
+
+  // Import the __main__ module (borrowed reference)
+  PyObject* main = PyImport_AddModule("__main__");
+  if (!main) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Get main module dictionary (borrowed reference)
+  PyObject* dict = PyModule_GetDict(main);
+  if (!dict) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Run the Python code
+  if (!PyRun_String(DRIVER_CODE_MANUAL_REQ_DIVERSION_FACES, Py_file_input, dict, dict)) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Release GIL
+  python__thread_state = PyEval_SaveThread();
+
+  return 0;
+}
+
+static int python__proc_manual_req_diversion_converse(const void* a, void* b) {
+  // Acquire GIL
+  PyEval_RestoreThread(python__thread_state);
+
+  // Import the __main__ module (borrowed reference)
+  PyObject* main = PyImport_AddModule("__main__");
+  if (!main) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Get main module dictionary (borrowed reference)
+  PyObject* dict = PyModule_GetDict(main);
+  if (!dict) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Run the Python code
+  if (!PyRun_String(DRIVER_CODE_MANUAL_REQ_DIVERSION_CONVERSE, Py_file_input, dict, dict)) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Release GIL
+  python__thread_state = PyEval_SaveThread();
+
+  return 0;
+}
+
+static int python__proc_manual_req_diversion_wander(const void* a, void* b) {
+  // Acquire GIL
+  PyEval_RestoreThread(python__thread_state);
+
+  // Import the __main__ module (borrowed reference)
+  PyObject* main = PyImport_AddModule("__main__");
+  if (!main) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Get main module dictionary (borrowed reference)
+  PyObject* dict = PyModule_GetDict(main);
+  if (!dict) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Run the Python code
+  if (!PyRun_String(DRIVER_CODE_MANUAL_REQ_DIVERSION_WANDER, Py_file_input, dict, dict)) {
+    // Handle exception
+    python__handle_exception();
+
+    return 1;
+  }
+
+  // Release GIL
+  python__thread_state = PyEval_SaveThread();
+
+  return 0;
+}
+
 //
 // Service Callbacks
 //
@@ -1377,6 +1664,20 @@ static int (* proc(int fn))(const void* a, void* b) {
   switch (fn) {
     case service_python_fn_op_exec:
       return &python__proc_op_exec;
+    case service_python_fn_interact_auto_enable:
+      return &python__proc_auto_enable;
+    case service_python_fn_interact_auto_disable:
+      return &python__proc_auto_disable;
+    case service_python_fn_interact_manual_advance:
+      return &python__proc_manual_advance;
+    case service_python_fn_interact_manual_return:
+      return &python__proc_manual_return;
+    case service_python_fn_interact_manual_req_diversion_faces:
+      return &python__proc_manual_req_diversion_faces;
+    case service_python_fn_interact_manual_req_diversion_converse:
+      return &python__proc_manual_req_diversion_converse;
+    case service_python_fn_interact_manual_req_diversion_wander:
+      return &python__proc_manual_req_diversion_wander;
   }
 
   return NULL;

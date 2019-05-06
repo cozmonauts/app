@@ -33,7 +33,19 @@ int main(int argc, char* argv[]) {
   service_start(SERVICE_PYTHON);
 
   // Call interact operation
-  //service_call(SERVICE_PYTHON, service_python_fn_op_exec, (const void*) service_python_op_interact, NULL);
+  service_call(SERVICE_PYTHON, service_python_fn_op_exec, (const void*) service_python_op_interact, NULL);
+
+  // Enable automatic mode
+  service_call(SERVICE_PYTHON, service_python_fn_interact_auto_enable, NULL, NULL);
+
+  sleep(10);
+
+  // Disable automatic mode
+  service_call(SERVICE_PYTHON, service_python_fn_interact_auto_disable, NULL, NULL);
+
+  sleep(5);
+
+  service_call(SERVICE_PYTHON, service_python_fn_interact_manual_return, NULL, NULL);
 
   // Wait for ^C
   signal(SIGINT, &sigint);

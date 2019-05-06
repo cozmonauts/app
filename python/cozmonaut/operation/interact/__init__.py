@@ -80,6 +80,9 @@ class OperationInteract(AbstractOperation):
         # This is initialized to 2 as a hack so we start with 1
         self._last_active_robot = 2
 
+        # Whether or not automatic mode is enabled
+        self._automatic = False
+
         # Whether or not to enable face tracking
         self._enable_face_tracking = False
 
@@ -126,6 +129,74 @@ class OperationInteract(AbstractOperation):
         # Wait for the interact thread to die
         self._thread.join()
         self._thread = None
+
+    def auto_enable(self):
+        """
+        Called to enable automatic interaction.
+        """
+
+        print('Enabling automatic mode')
+
+        # Set automatic flag
+        self._automatic = True
+
+    def auto_disable(self):
+        """
+        Called to disable automatic interaction.
+        """
+
+        print('Disabling automatic mode')
+
+        # Clear automatic flag
+        self._automatic = False
+
+    def manual_advance(self):
+        """
+        Called to manually advance.
+        """
+
+        print('Manually requesting advance')
+
+        self._pending_advance_from_charger = True
+
+    def manual_return(self):
+        """
+        Called to manually return.
+        """
+
+        print('Manually requesting return')
+
+        self._pending_return_to_charger = True
+
+    def manual_req_diversion_faces(self):
+        """
+        Called to manually request faces diversion.
+        """
+
+        print('Manually requesting faces diversion')
+
+        self._req_diversion_faces = True
+        self._pending_diversion = True
+
+    def manual_req_diversion_converse(self):
+        """
+        Called to manually request converse diversion.
+        """
+
+        print('Manually requesting converse diversion')
+
+        self._req_diversion_converse = True
+        self._pending_diversion = True
+
+    def manual_req_diversion_wander(self):
+        """
+        Called to manually request wander diversion.
+        """
+
+        print('Manually requesting wander diversion')
+
+        self._req_diversion_wander = True
+        self._pending_diversion = True
 
     def _interact_main(self):
         """
@@ -816,38 +887,48 @@ class OperationInteract(AbstractOperation):
         print('Governor started')
 
         while not (self.stopped and self._active_robot == 0):
-            # If no robot is currently active
-            if self._active_robot == 0:
-                print(f'Robot {self._last_active_robot} is no longer active')
+            # If we're in automatic mode
+            if self._automatic:
+                # If no robot is currently active
+                if self._active_robot == 0:
+                    print(f'Robot {self._last_active_robot} is no longer active')
 
-                # Pick the next active robot
-                # It is the opposite of the last active robot
-                if self._last_active_robot == 1:
-                    self._active_robot = 2
-                elif self._last_active_robot == 2:
-                    self._active_robot = 1
+                    # Pick the next active robot
+                    # It is the opposite of the last active robot
+                    if self._last_active_robot == 1:
+                        self._active_robot = 2
+                    elif self._last_active_robot == 2:
+                        self._active_robot = 1
 
-                print(f'Governor has activated robot {self._active_robot}')
+                    print(f'Governor has activated robot {self._active_robot}')
 
-                # Advance from charger
-                self._pending_advance_from_charger = True
+                    # Advance from charger
+                    self._pending_advance_from_charger = True
 
-                # Yield while advancing
-                while self._pending_advance_from_charger:
-                    await asyncio.sleep(0)
+                    # Yield while advancing
+                    while self._pending_advance_from_charger and self._automatic:
+                        await asyncio.sleep(0)
 
-                print(f'Governor detects robot {self._active_robot} has advanced')
+                    # If no longer automatic, skip the iteration
+                    if not self._automatic:
+                        continue
 
-                # Set up for interaction
-                self._pending_interact = True
+                    print(f'Governor detects robot {self._active_robot} has advanced')
 
-                # FIXME: The faces diversion is hardcoded
-                self._pending_diversion = True
-                self._req_diversion_faces = True
+                    # Set up for interaction
+                    self._pending_interact = True
 
-                # Yield while interacting
-                while self._pending_interact:
-                    await asyncio.sleep(0)
+                    # FIXME: The faces diversion is hardcoded
+                    self._pending_diversion = True
+                    self._req_diversion_faces = True
+
+                    # Yield while interacting
+                    while self._pending_interact and self._automatic:
+                        await asyncio.sleep(0)
+
+                    # If no longer automatic, skip the iteration
+                    if not self._automatic:
+                        continue
 
             # Yield control
             await asyncio.sleep(0)
