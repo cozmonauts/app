@@ -4,21 +4,20 @@
  */
 
 #include <stdio.h>
-#include <stdlib.h>
 
-#include <linenoise.h>
-
+#include "service/python.h"
 #include "global.h"
+#include "service.h"
 
 int main(int argc, char* argv[]) {
   g_mut->argc = argc;
   g_mut->argv = (const char**) argv;
 
-  char* line;
-  while ((line = linenoise("C:\\> ")) != NULL) {
-    if (line[0] != '\0') {
-      printf("echo: %s\n", line);
-    }
-    free(line);
-  }
+  service_load(SERVICE_PYTHON);
+  service_start(SERVICE_PYTHON);
+
+  // TODO
+
+  service_stop(SERVICE_PYTHON);
+  service_unload(SERVICE_PYTHON);
 }

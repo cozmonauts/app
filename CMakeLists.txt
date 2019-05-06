@@ -13,6 +13,7 @@ find_package(PythonInterp 3.6 REQUIRED)
 find_package(PythonLibs 3.6 REQUIRED)
 
 set(cozmo_SRC_FILES
+        src/service/python.c
         src/global.c
         src/log.c
         src/log_fmt.cpp
