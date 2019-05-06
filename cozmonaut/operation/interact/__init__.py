@@ -4,14 +4,17 @@
 #
 
 import asyncio
+import functools
 import math
+import random
 from enum import Enum
 from threading import Thread
 
 import cozmo
 
+import cozmonaut.operation.interact.database
 from cozmonaut.operation import AbstractOperation
-from .face_tracker import FaceTracker
+from .face_tracker import FaceTracker, DetectedFace, RecognizedFace
 
 
 class InteractMode(Enum):
@@ -75,6 +78,9 @@ class OperationInteract(AbstractOperation):
         # This is initialized to 2 as a hack so we start with 1
         self._last_active_robot = 2
 
+        # Whether or not to enable face tracking
+        self._enable_face_tracking = False
+
         # Whether or not there is a pending advance from charger
         self._pending_advance_from_charger = False
 
@@ -86,6 +92,15 @@ class OperationInteract(AbstractOperation):
 
         # Whether or not there is a pending low battery test
         self._pending_low_battery_test = False
+
+        # Whether or not the "faces" diversion is requested
+        self._req_diversion_faces = False
+
+        # Whether or not the "converse" diversion is requested
+        self._req_diversion_converse = False
+
+        # Whether or not the "wander" diversion is requested
+        self._req_diversion_wander = False
 
     def start(self):
         """
@@ -391,10 +406,17 @@ class OperationInteract(AbstractOperation):
             0.0604078,
             0.0337079
         )
-        self._face_tracker_a.add_identity(42, tyler_face)
-        self._face_tracker_b.add_identity(42, tyler_face)
+        # self._face_tracker_a.add_identity(42, tyler_face)
+        # self._face_tracker_b.add_identity(42, tyler_face)
 
-        # TODO: Load from the database
+        print('Loading known faces from database')
+
+        # Known student information
+        known_faces = database.loadStudents()
+
+        if known_faces is not None:
+            for (fid, ident) in known_faces:
+                print(f'{fid} -> {ident}')
 
         # Start the face trackers
         self._face_tracker_a.start()
@@ -444,10 +466,20 @@ class OperationInteract(AbstractOperation):
 
         print(f'Driver started for Cozmo {"A" if index == 1 else "B"} (robot #{index})')
 
+        # Enable color imaging on this Cozmo
+        robot.camera.color_image_enabled = True
+        robot.camera.image_stream_enabled = True
+
+        # Listen for camera frames from this Cozmo
+        # We use functools to create a partially-bound function that sneaks in our index and robot parameters
+        robot.camera.add_event_handler(cozmo.robot.camera.EvtNewRawCameraImage,
+                                       functools.partial(self._driver_on_evt_new_raw_camera_image, index, robot))
+
         # Sub-coroutines
         sub = asyncio.gather(
             self._watch_battery(index, robot),
             self._watch_faces(index, robot),
+            self._diversion_faces(index, robot),
         )
 
         # The waypoint pose
@@ -458,6 +490,11 @@ class OperationInteract(AbstractOperation):
             if self._active_robot == index:
                 # If an advance is pending
                 if self._pending_advance_from_charger:
+                    #
+                    # SECTION FOR DRIVING FROM THE CHARGER
+                    # (the waypoint pose is saved here)
+                    #
+
                     # Drive off the contacts
                     # We need to do this to get access to other drive commands
                     await robot.drive_off_charger_contacts().wait_for_completed()
@@ -476,12 +513,9 @@ class OperationInteract(AbstractOperation):
 
                 # If interaction is pending
                 if self._pending_interact:
-                    print('interact')
-
-                    # TODO
-                    await robot.turn_in_place(cozmo.util.degrees(90)).wait_for_completed()
-                    await robot.drive_straight(distance=cozmo.util.distance_mm(50),
-                                               speed=cozmo.util.speed_mmps(20)).wait_for_completed()
+                    #
+                    # SECTION FOR INTERACTING/CONVERSING
+                    #
 
                     # Clear pending flag
                     self._pending_interact = False
@@ -490,7 +524,12 @@ class OperationInteract(AbstractOperation):
 
                 # If a return to charger is pending
                 if self._pending_return_to_charger:
-                    # Return to the waypoint
+                    #
+                    # SECTION FOR RETURNING TO THE CHARGER
+                    # (the saved waypoint pose is used here)
+                    #
+
+                    # Return to the saved waypoint (based on Eric's routine)
                     await robot.go_to_pose(waypoint).wait_for_completed()
 
                     # Turn toward the charger
@@ -615,7 +654,7 @@ class OperationInteract(AbstractOperation):
                                                       ignore_lift_track=True, in_parallel=True).wait_for_completed()
                         await robot.backup_onto_charger(max_drive_time=3)
                     else:
-                        print('The charger was not detected! Assuming we\'re on it?')  # TODO: What do?
+                        print('The charger was not detected! Assuming we\'re on it?')  # TODO: What do? Call for help...
 
                     #
                     # END INTEGRATED CHARGER RETURN CODE
@@ -641,7 +680,43 @@ class OperationInteract(AbstractOperation):
 
         print(f'Driver for Cozmo {"A" if index == 1 else "B"} (robot #{index}) stopping')
 
-    async def _driver_find_charger(self, robot: cozmo.robot.Robot):
+    def _driver_on_evt_new_raw_camera_image(self, index: int, robot: cozmo.robot.Robot,
+                                            evt: cozmo.robot.camera.EvtNewRawCameraImage, **kwargs):
+        """
+        Called by the Cozmo SDK when a camera frame comes in.
+
+        :param index: The robot index (ours)
+        :param robot: The robot instance (ours)
+        :param evt: The event (SDK)
+        :param kwargs: Excess keyword arguments
+        """
+
+        # The camera frame image
+        image = evt.image
+
+        # If face tracking is enabled
+        if self._enable_face_tracking:
+            # The face tracker for this Cozmo robot
+            tracker: FaceTracker = None
+
+            # Pick the corresponding face tracker
+            if index == 1:
+                tracker = self._face_tracker_a
+            elif index == 2:
+                tracker = self._face_tracker_b
+
+            # Update the Cozmo-corresponding tracker with the new camera frame
+            tracker.update(image)
+
+    async def _driver_find_charger(self, robot: cozmo.robot.Robot) -> cozmo.objects.Charger:
+        """
+        Locate the nearest charger from the perspective of a robot.
+
+        Part of the driver routine for a single Cozmo robot.
+
+        :param robot: The robot instance
+        """
+
         print('Starting to look for the charger')
 
         rnd = 1
@@ -803,7 +878,7 @@ class OperationInteract(AbstractOperation):
         if distance < distance_tol and math.fabs(robot_rot_xy - charger_rot_xy) < angle_tol:
             print('Successfully aligned')
         else:
-            print('Did not align successfully')  # TODO: Should retry
+            print('Did not align successfully')  # TODO: Should we retry here?
 
     @staticmethod
     def _util_wrap_radians(angle: float):
@@ -818,6 +893,37 @@ class OperationInteract(AbstractOperation):
             angle += 2 * math.pi
 
         return angle
+
+    async def _diversion_faces(self, index: int, robot: cozmo.robot.Robot):
+        """
+        The faces diversion.
+
+        :param index: The robot index
+        :param robot: The robot instance
+        """
+
+        while not self.stopped:
+            # Yield while not stopping and faces diversion is not requested for this robot
+            while not self.stopped and not (self._active_robot == index and self._req_diversion_faces):
+                await asyncio.sleep(0)
+
+            print('Engaging faces diversion')
+
+            # Enable face tracking
+            # The face watcher coroutine does the meet-and-greet for now
+            self._enable_face_tracking = True
+
+            # Yield while faces diversion is requested for this robot
+            while not self.stopped and self._active_robot == index and self._req_diversion_faces:
+                await asyncio.sleep(0)
+
+            # Disable face tracking
+            self._enable_face_tracking = False
+
+            print('Disengaging faces diversion')
+
+            # Yield control
+            await asyncio.sleep(0)
 
     async def _governor(self):
         """
@@ -854,8 +960,12 @@ class OperationInteract(AbstractOperation):
 
                 print(f'Governor detects robot {self._active_robot} has advanced')
 
-                # Interact with people
+                # Set up for interaction
                 self._pending_interact = True
+
+                # FIXME: The faces diversion is hardcoded
+                self._pending_diversion = True
+                self._req_diversion_faces = True
 
                 # Yield while interacting
                 while self._pending_interact:
@@ -918,13 +1028,135 @@ class OperationInteract(AbstractOperation):
 
         print(f'Face watcher started for Cozmo {"A" if index == 1 else "B"} (robot #{index})')
 
-        while not self.stopped:
-            # If this robot is active (implies non charging)
-            if self._active_robot == index:
-                pass
+        # The face tracker for this Cozmo robot
+        tracker: FaceTracker = None
 
-            # Sleep for a bit
-            await asyncio.sleep(1)  # TODO: Wait for however long
+        # Pick the corresponding face tracker
+        if index == 1:
+            tracker = self._face_tracker_a
+        elif index == 2:
+            tracker = self._face_tracker_b
+
+        while not self.stopped:
+            # If face tracking is not yet enabled
+            if not self._enable_face_tracking:
+                print('Waiting for face tracking to be enabled')
+
+                # Yield while face tracking is not enabled
+                while not self._enable_face_tracking:
+                    await asyncio.sleep(0)
+
+            # If this robot is active (implies not charging)
+            if self._active_robot == index:
+                print('Waiting to detect a face')
+
+                # Submit a work order to detect a face (on a background thread)
+                # Keeping it in concurrent future form will let us cancel it easily
+                face_det_future = tracker.next_track()
+
+                # While detection is not done
+                while not face_det_future.done():
+                    # If face tracking is disabled, cancel detection
+                    if not self._enable_face_tracking:
+                        print('Face tracking early disable, cancelling detection')
+                        face_det_future.cancel()
+                        break
+
+                    # Yield control
+                    await asyncio.sleep(0)
+
+                # Bail out if face tracking is disabled
+                if not self._enable_face_tracking:
+                    continue
+
+                # The detected face
+                face_det: DetectedFace = face_det_future.result()
+
+                # The index of the tracked face
+                # These are unique through time, so we'll never see this exact index again
+                # (well, unless we get a signed 64-bit integer overflow)
+                face_index = face_det.index
+
+                # The coordinates of the detected face
+                # This is a 4-tuple of the form (left, top, right, and bottom) with int components
+                face_coords = face_det.coords
+
+                print(f'Detected face {face_index} at {face_coords}')
+
+                # TODO: Center on the face
+
+                # Submit a work order to recognize the detected face (uses a background thread)
+                # The face tracker is holding onto the original picture of the detected face
+                # FIXME: This might actually be bad, as the detection is more lenient than recognition
+                #  The detector might pick up a motion-blurred face, but then recognition might be bad
+                #  This is not a priority for the group presentation, however, as we can control how fast we turn
+                face_rec: RecognizedFace = await asyncio.wrap_future(tracker.recognize(face_index))
+
+                # The face ID
+                # This corresponds to the ID assigned to the matched face identity during program startup
+                # In our implementation, this is the AUTO_INCREMENT field in the database table
+                face_id = face_rec.fid
+
+                # The face identity
+                # This is a 128-tuple of doubles for the face vector (AKA encoding, embedding, descriptor, etc.)
+                face_ident = face_rec.ident
+
+                print(f'Recognized face {face_index} at {face_coords} as ID {face_id}')
+
+                if face_id == -1:
+                    print('We do not know this face')
+
+                    # Ask for a name
+                    num = random.randrange(3)
+                    if num == 0:
+                        await robot.say_text('Who are you?').wait_for_completed()
+                    elif num == 1:
+                        await robot.say_text('What is your name?').wait_for_completed()
+                    elif num == 2:
+                        await robot.say_text('Please say your name.').wait_for_completed()
+
+                    # TODO: Get this from either speech rec or the command-line
+                    name = 'Bob'
+
+                    # Insert face into the database and get the assigned face ID (thanks Herman, this is easy to use)
+                    face_id = database.insertNewStudent(name, face_ident)
+
+                    # Add identity to both Cozmo A and B face trackers
+                    # This lets us recognize this face again in the same session
+                    # On subsequent sessions, we'll read from the database
+                    self._face_tracker_a.add_identity(face_id, face_ident)
+                    self._face_tracker_b.add_identity(face_id, face_ident)
+
+                    # Repeat the name
+                    num = random.randrange(3)
+                    if num == 0:
+                        await robot.say_text(f'Hi, {name}!').wait_for_completed()
+                    elif num == 1:
+                        await robot.say_text(f'Hello there, {name}!').wait_for_completed()
+                    elif num == 2:
+                        await robot.say_text(f'Nice to meet you, {name}!').wait_for_completed()
+                else:
+                    print('We know this face')
+
+                    # Get name and time last seen for this face
+                    name, time_last_seen = database.determineStudent(face_id)
+
+                    # Update time last seen for face
+                    database.checkForStudent(face_id)
+
+                    # TODO: Maybe we can add some "welcome back"-style messages that use the time last seen!
+
+                    # Welcome the person back
+                    num = random.randrange(3)
+                    if num == 0:
+                        await robot.say_text(f'Welcome back, {name}!').wait_for_completed()
+                    elif num == 1:
+                        await robot.say_text(f'Hello again, {name}!').wait_for_completed()
+                    elif num == 2:
+                        await robot.say_text(f'Good to see you, {name}!').wait_for_completed()
+
+            # Yield control
+            await asyncio.sleep(0)  # TODO: Should we sleep for longer?
 
         print(f'Face watcher for Cozmo {"A" if index == 1 else "B"} (robot #{index}) stopping')
 

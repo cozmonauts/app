@@ -381,7 +381,7 @@ class FaceTracker:
                                 self._next_track_futures.clear()
 
             # Sleep for a bit
-            time.sleep(0.5)
+            time.sleep(3)  # TODO: This should dynamically reduce during face diversion and scale back up otherwise
 
     def _recognize_main(self, index: int) -> Optional[RecognizedFace]:
         """

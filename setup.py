@@ -15,7 +15,7 @@ setup(
     install_requires=[
         'cozmo',
         'dlib',
-        'mysql',
+        'mysql-connector',
         'numpy',
         'opencv-python',
         'pillow',

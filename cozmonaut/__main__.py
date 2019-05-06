@@ -10,8 +10,8 @@ from .operation.interact import OperationInteract, InteractMode
 
 def main():
     args = {
-        'ser-a': '45a18821',
-        'ser-b': '0241c714',
+        'ser-a': '0241c714',
+        'ser-b': '45a18821',
         'mode': 'both',
     }
 
