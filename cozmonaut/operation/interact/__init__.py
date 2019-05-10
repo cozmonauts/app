@@ -366,9 +366,6 @@ class InteractInterface(cmd2.Cmd):
         self.allow_cli_args = False
 
     def sigint_handler(self, signum: int, frame):
-        # Stop the operation
-        self._op.stop()
-
         # Quit the interface
         self.onecmd_plus_hooks(['quit'])
 
