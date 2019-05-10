@@ -43,6 +43,7 @@ setup(
     python_requires='>=3.6.0',
     install_requires=[
         'cozmo',
+        'docopt',
         'dlib',
         'numpy',
         'pillow',
