@@ -1,0 +1,22 @@
+{
+  "name": "endgame",
+  "script": []
+}
+
+//await self._robot_a.say_text("Hey! Listen!").wait_for_completed()
+//            await self._robot_b.say_text("What is it?").wait_for_completed()
+//            # await self._robot_a.say_text("Did you see " + recentName + " walk past?").wait_for_completed() #this attempts to namedrop the last person seen
+//            await self._robot_b.say_text("I don't recall, why?").wait_for_completed()
+//            await self._robot_a.say_text("I need to talk to somebody about Endgame").wait_for_completed()
+//            await self._robot_b.say_text("Don't say a word to me! I haven't seen it yet").wait_for_completed()
+//            await self._robot_a.say_text("Okay, sorry, I won't").wait_for_completed()
+//            await self._robot_b.say_text(
+//                "I have to stay off the internet to avoid spoilers. You have no idea how hard it is to be a robot and not go on the internet").wait_for_completed()
+//            await self._robot_a.say_text("I won't say anything, but know this...").wait_for_completed()
+//            await self._robot_b.say_text("SHUT UP!").wait_for_completed()
+//
+//            await self._robot_a.play_anim_trigger(cozmo.anim.Triggers.CodeLabUnhappy).wait_for_completed()
+//
+//            await self._robot_a.say_text("Okay, sorry, I'll leave now").wait_for_completed()
+//            await self._robot_b.say_text("Thank you").wait_for_completed()
+//# await self._robot_a.say_text("I hope " + recentName + " comes back soon").wait_for_completed()

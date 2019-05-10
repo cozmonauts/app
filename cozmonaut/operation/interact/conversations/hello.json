@@ -1,0 +1,47 @@
+{
+  "name": "hello",
+  "script": [
+    {
+      "action": "say",
+      "who": "a",
+      "what": "Hello, can you hear me?",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Roger roger, read you loud and clear",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "anim",
+      "who": "a",
+      "what": "cozmo.anim.Triggers.CodeLabHappy"
+    },
+    {
+      "action": "anim",
+      "who": "a",
+      "what": "cozmo.anim.Triggers.CodeLabReactHappy"
+    },
+    {
+      "action": "say",
+      "who": "a",
+      "what": "Yeah! We both spoke. I'm done talking now",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Sounds good, over and out",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    }
+  ]
+}

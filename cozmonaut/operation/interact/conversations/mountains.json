@@ -1,0 +1,69 @@
+{
+  "name": "mountains",
+  "script": [
+    {
+      "action": "say",
+      "who": "a",
+      "what": "Now there's something you don't see every day, Chauncy",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "What's that, Edgar",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "a",
+      "what": "A mountain floating above our heads",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "What mountain floating above our heads?",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "a",
+      "what": "The one I'm detecting with my superior robotic sensors",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Oh, I don't know Edgar. The world is changing. Floating mountains are actually quite common these days",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "a",
+      "what": "I suppose you're right as always Chauncy",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "That's right, Edgar",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    }
+  ]
+}
