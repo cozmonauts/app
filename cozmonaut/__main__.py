@@ -17,12 +17,10 @@ Options:
     --version       Show version information.
 """
 
-import time
-
 from docopt import docopt
 
 from cozmonaut import __version__
-from cozmonaut.operation.interact import OperationInteract
+from cozmonaut.operation.interact import InteractInterface, OperationInteract
 
 
 def do_list_friends():
@@ -77,18 +75,17 @@ def do_interact(sera: str, serb: str):
         print('Need to specify at least one robot')
         exit(1)
 
-    # Start the operation
+    # Start the operation in the background
+    # We need to keep the foreground (main thread) open for the terminal interface
     op = OperationInteract(args)
     op.start()
 
-    # Sleep until operation stops or interrupted (e.g. via ^C on a terminal)
-    while op.is_running():
-        try:
-            time.sleep(1)
-        except KeyboardInterrupt:
-            break
+    # Run the terminal interface for the interact operation
+    # This internally registers a SIGINT handler
+    iface = InteractInterface(op)
+    iface.cmdloop()
 
-    # Print a message indicating we made it this far
+    # Print a message if the operation completed without assistance
     if not op.is_running():
         print('The operation completed naturally')
 

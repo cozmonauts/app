@@ -7,6 +7,7 @@ import asyncio
 from enum import Enum
 from threading import Lock, Thread
 
+import cmd2
 import cozmo
 
 from cozmonaut.operation import Operation
@@ -43,7 +44,7 @@ class OperationInteract(Operation):
 
         # The interact thread
         # We'll run the event loop on this thread asynchronously
-        self._thread: Thread = None
+        self._thread_interact: Thread = None
 
         # A kill switch for the operation (thread-safe)
         self._should_stop = False
@@ -65,16 +66,18 @@ class OperationInteract(Operation):
         """
         Start the interact operation.
         """
+
         super().start()
 
         # Spawn the interact thread
-        self._thread = Thread(target=self._thread_main, name='Interact')
-        self._thread.start()
+        self._thread_interact = Thread(target=self._thread_interact_main, name='Interact')
+        self._thread_interact.start()
 
     def stop(self):
         """
         Stop the interact operation.
         """
+
         super().stop()
 
         # Set the interact thread kill switch
@@ -82,8 +85,9 @@ class OperationInteract(Operation):
             self._should_stop = True
 
         # Wait for the interact thread to die
-        self._thread.join()
-        self._thread = None
+        if self._thread_interact is not None:
+            self._thread_interact.join()
+            self._thread_interact = None
 
     def is_running(self):
         """
@@ -96,7 +100,7 @@ class OperationInteract(Operation):
         with self._stopped_lock:
             return not self._stopped
 
-    def _thread_main(self):
+    def _thread_interact_main(self):
         """
         The main function of the interact thread.
         """
@@ -336,6 +340,37 @@ class OperationInteract(Operation):
             await asyncio.sleep(0)
 
         print('Controller has stopped')
+
+
+class InteractInterface(cmd2.Cmd):
+    """
+    Terminal interface for the interact operation.
+    """
+
+    intro = 'Welcome to Cozmonaut! Type "help" for available commands.'
+    prompt = '(cozmo) '
+
+    def __init__(self, op: OperationInteract):
+        """
+        Create an interact operation terminal interface.
+
+        :param op: The interact operation
+        """
+
+        super().__init__()
+
+        # Keep the operation
+        self._op = op
+
+        # Opt out of cmd2's built-in cmdline handling
+        self.allow_cli_args = False
+
+    def sigint_handler(self, signum: int, frame):
+        # Stop the operation
+        self._op.stop()
+
+        # Quit the interface
+        self.onecmd_plus_hooks(['quit'])
 
 
 # Stay on the charger during the connection process

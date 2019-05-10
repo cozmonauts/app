@@ -42,6 +42,7 @@ setup(
     packages=find_packages(exclude=['venv']),
     python_requires='>=3.6.0',
     install_requires=[
+        'cmd2',
         'cozmo',
         'docopt',
         'dlib',
