@@ -17,6 +17,8 @@ Options:
     --version       Show version information.
 """
 
+import time
+
 from docopt import docopt
 
 from cozmonaut import __version__
@@ -79,6 +81,9 @@ def do_interact(sera: str, serb: str):
     # We need to keep the foreground (main thread) open for the terminal interface
     op = OperationInteract(args)
     op.start()
+
+    # Give the operation a few seconds to set up
+    time.sleep(3)
 
     # Run the terminal interface for the interact operation
     # This internally registers a SIGINT handler

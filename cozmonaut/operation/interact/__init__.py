@@ -347,7 +347,7 @@ class InteractInterface(cmd2.Cmd):
     Terminal interface for the interact operation.
     """
 
-    intro = 'Welcome to Cozmonaut! Type "help" for available commands.'
+    intro = ''
     prompt = '(cozmo) '
 
     def __init__(self, op: OperationInteract):
