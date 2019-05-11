@@ -258,12 +258,11 @@ class OperationInteract(Operation):
                 self._driver(1, self._robot_a),
                 self._driver(2, self._robot_b),
 
-                # The controller coroutine manages the robots from a high level
-                # This routine captures the "big picture" so to speak and takes user command
-                self._controller(),
+                # The choreographer coroutine automates the robots from a high level
+                self._choreographer(),
 
                 # Explicitly provide our event loop
-                # Without this, there will be an error along the lines of 'no current event loop'
+                # Without this, there will be an error along the lines of "no current event loop"
                 loop=loop,
             )
 
@@ -285,7 +284,7 @@ class OperationInteract(Operation):
 
         while not self._stopping:
             # Check if we should stop
-            # There shouldn't be any contention on this lock
+            # There shouldn't be much contention on this lock
             with self._should_stop_lock:
                 should_stop = self._should_stop
 
@@ -322,24 +321,29 @@ class OperationInteract(Operation):
 
         print(f'Driver for robot {letter} has started')
 
+        # Stop if this driver is not needed
+        if robot is None:
+            print(f'Robot {letter} is not available, so driver {letter} is stopping')
+            return
+
         while not self._stopping:
             # Yield control
             await asyncio.sleep(0)
 
         print(f'Driver for robot {letter} has stopped')
 
-    async def _controller(self):
+    async def _choreographer(self):
         """
-        The controller for one or two robots.
+        The choreographer gives high-level commands to one or two robots.
         """
 
-        print('Controller has started')
+        print('Choreographer has started')
 
         while not self._stopping:
             # Yield control
             await asyncio.sleep(0)
 
-        print('Controller has stopped')
+        print('Choreographer has stopped')
 
 
 class InteractInterface(cmd2.Cmd):
