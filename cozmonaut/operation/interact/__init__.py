@@ -5,6 +5,7 @@
 
 import argparse
 import asyncio
+import math
 import queue
 from enum import Enum
 from threading import Lock, Thread
@@ -416,11 +417,18 @@ class OperationInteract(Operation):
 
                 if state_current == _RobotState.home:
                     if state_next == _RobotState.waypoint:
-                        # GOTO waypoint -> home
+                        # GOTO home -> waypoint
                         state_final = state_next
 
                         # Drive from the charger to the waypoint
                         await self._do_drive_from_charger_to_waypoint(index, robot)
+                elif state_current == _RobotState.waypoint:
+                    if state_next == _RobotState.home:
+                        # GOTO waypoint -> home
+                        state_final = state_next
+
+                        # Drive from the waypoint to the charger
+                        await self._do_drive_from_waypoint_to_charger(index, robot)
 
                 # If the state did not change
                 if state_final == state_current:
@@ -475,7 +483,335 @@ class OperationInteract(Operation):
 
         print(f'Robot {letter} is departing from waypoint and heading to charger')
 
-        # TODO: Add charger return code
+        # Get robot waypoint
+        #waypoint = None
+        #if index == 1:
+        #    waypoint = self._robot_waypoint_a
+        #elif index == 2:
+        #    waypoint = self._robot_waypoint_b
+
+        # Return to the saved waypoint (based on Eric's routine)
+        #await robot.go_to_pose(waypoint).wait_for_completed()
+
+        # Turn toward the charger
+        await robot.turn_in_place(cozmo.util.degrees(180)).wait_for_completed()
+
+        #
+        # BEGIN INTEGRATED CHARGER RETURN CODE
+        # This uses Herman's routines
+        #
+
+        # Look a little bit down but not straight ahead
+        # We need the camera to be able to see the charger
+        await robot.set_head_angle(cozmo.util.degrees(0)).wait_for_completed()
+
+        # Cozmo's accelerometer is located in his head
+        # We need to take a baseline reading before we use accelerometer during charger parking
+        pitch_threshold = math.fabs(robot.pose_pitch.degrees) + 1
+
+        # Drive to the charger
+        await self._charger_return_go_to_charger_coarse(robot)
+
+        # If the charger location is known (it should be)
+        if robot.world.charger is not None:
+            # Invalidate the charger pose
+            if robot.world.charger.pose.is_comparable(robot.pose):
+                robot.world.charger.pose.invalidate()
+
+        # Look for the charger again
+        await self._charger_return_find_charger(robot)
+
+        # Add finishing touches to our staging
+        await self._charger_return_go_to_charger_fine(robot)
+
+        # Face away from the charger (very precisely)
+        await robot.turn_in_place(cozmo.util.degrees(180),
+                                  angle_tolerance=cozmo.util.degrees(2)).wait_for_completed()
+
+        # Point head forward-ish and lift lift out of way of charger
+        await robot.set_lift_height(height=0.5, max_speed=10, in_parallel=True).wait_for_completed()
+        await robot.set_head_angle(cozmo.util.degrees(0), in_parallel=True).wait_for_completed()
+
+        print('Begin strike phase')
+        print('The robot will try to strike the base of the charger')
+
+        # Start driving backward pretty quickly
+        robot.drive_wheel_motors(-60, -60)
+
+        # Timeout and elapsed time for strike phase
+        timeout = 3
+        elapsed = 0
+        delta = 0.05
+
+        # Wait until we hit the charger
+        # Cozmo will start to pitch forward, and that breaks the loop
+        while True:
+            # Wait one phase delta
+            await asyncio.sleep(delta)
+            elapsed += delta
+
+            if elapsed >= timeout:
+                print('Timed out while waiting for robot to strike the charger')
+                break
+            elif math.fabs(robot.pose_pitch.degrees) >= pitch_threshold:
+                print('The robot seems to have struck the charger (this is normal)')
+                break
+
+        # Striking done, stop motors
+        robot.stop_all_motors()
+
+        # Wait a little
+        await asyncio.sleep(0.5)
+
+        print('Begin flattening phase')
+        print('The robot will try to flatten out on the charger')
+
+        # Start driving backward a little slower
+        # We want to avoid driving up onto the back wall of the charger
+        robot.drive_wheel_motors(-35, -35)
+
+        # Timeout and elapsed time for flattening phase
+        timeout = 5
+        elapsed = 0
+        delta = 0.05
+
+        # Wait until we flatten back out
+        # The pitch returns to flat which indicates fully onboard
+        while True:
+            # Wait one phase time
+            await asyncio.sleep(delta)
+            elapsed += delta
+
+            if elapsed >= timeout:
+                print('Timed out while waiting for robot to flatten out on the charger')
+                break
+            elif math.fabs(robot.pose_pitch.degrees) > 20:
+                print('Robot pitch has reached an unexpected value (drove on wall?)')
+                break
+            elif math.fabs(robot.pose_pitch.degrees) < pitch_threshold:
+                print('The robot seems to have flattened out on the charger (this is normal)')
+                break
+
+        # Flattening done, stop motors
+        robot.stop_all_motors()
+
+        # Wait a little
+        await asyncio.sleep(0.5)
+
+        # Lower lift and nestle in
+        await robot.set_lift_height(height=0, max_speed=10, in_parallel=True).wait_for_completed()
+        await robot.backup_onto_charger(max_drive_time=3)
+
+        # Sometimes robot.backup_onto_charger times out as gravity needs to let Cozmo fall onto contacts
+        await asyncio.sleep(1)
+
+        # If we made it onto the charger contacts
+        if robot.is_on_charger:
+            print('The robot is on the charger... Let\'s celebrate!')
+
+            # Play a celebration animation
+            await robot.drive_off_charger_contacts().wait_for_completed()
+            await robot.play_anim_trigger(cozmo.anim.Triggers.CodeLabCelebrate, ignore_body_track=True,
+                                          ignore_lift_track=True, in_parallel=True).wait_for_completed()
+            await robot.backup_onto_charger(max_drive_time=3)
+        else:
+            print('The charger was not detected! Assuming we\'re on it?')  # TODO: What do? Call for help...
+
+        #
+        # END INTEGRATED CHARGER RETURN CODE
+        # (some component functions follow)
+        #
+
+    async def _charger_return_find_charger(self, robot: cozmo.robot.Robot) -> cozmo.objects.Charger:
+        """
+        Locate the nearest charger from the perspective of a robot.
+
+        Part of the driver routine for a single Cozmo robot.
+
+        :param robot: The robot instance
+        """
+
+        print('Starting to look for the charger')
+
+        rnd = 1
+
+        # Be persistent, Cozmo!
+        while True:
+            print(f'Look for charger (round {rnd})')
+
+            rnd += 1
+
+            # Remember the robot pose before looking around
+            pose_before = robot.pose
+
+            # Start to look around at the surroundings
+            # The Cozmo app will pick up on any visible charger
+            behave = robot.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace)
+
+            # Yield control
+            await asyncio.sleep(0)
+
+            # While we're looking around, keep an eye out for chargers
+            try:
+                seen_charger = await robot.world.wait_for_observed_charger(timeout=3, include_existing=True)
+            except cozmo.exceptions.CozmoSDKException:
+                seen_charger = None
+
+            # Stop looking around
+            # We may or may not have seen a charger
+            behave.stop()
+
+            # Go back to the pose before looking around
+            await robot.go_to_pose(pose_before).wait_for_completed()
+
+            # If we saw a charger, use that one
+            if seen_charger is not None:
+                print('The charger was found!')
+                return seen_charger
+            else:
+                print('The charger was not found! :(')
+
+                # Play frustrated animation
+                await robot.play_anim_trigger(cozmo.anim.Triggers.FrustratedByFailureMajor).wait_for_completed()
+
+                # Ask for help
+                # TODO: Is is okay that this happens here? I know we talked about asking for help...
+                await robot.say_text('A little help?').wait_for_completed()
+
+    async def _charger_return_go_to_charger_coarse(self, robot: cozmo.robot.Robot):
+        """
+        Coarsely drive a robot up to the first seen charger.
+
+        This ballparks it. There must be further correction.
+
+        :param robot: The robot instance
+        """
+
+        # The charger reference
+        charger = None
+
+        # If the charger location is known
+        if robot.world.charger is not None:
+            # If the charger pose is in the same coordinate frame as the robot
+            # This might not be the case if the robot gets picked up by a person or falls ("delocalizing")
+            if robot.world.charger.pose.is_comparable(robot.pose):
+                print('The charger pose is already known')
+
+                # Just take the charger reference
+                charger = robot.world.charger
+
+        # If we don't yet have the charger reference
+        if not charger:
+            # Find the charger
+            charger = await self._charger_return_find_charger(robot)
+
+        # Drive to the charger the first time
+        # This is a ballpark maneuver; we'll fine-tune it next
+        await robot.go_to_object(
+            charger,
+            distance_from_object=cozmo.util.distance_mm(80),
+            num_retries=5
+        ).wait_for_completed()
+
+    async def _charger_return_go_to_charger_fine(self, robot: cozmo.robot.Robot):
+        """
+        The fine part of charger goto functionality.
+
+        Make sure you have called the coarse variant first.
+
+        :param robot: The robot instance
+        """
+
+        # Grab the charger reference
+        charger = robot.world.charger
+
+        # Assumed distance from charger
+        charger_distance = 40
+
+        # Speed at which to drive
+        speed = 40
+
+        # Positions of robot and charger
+        robot_pos = robot.pose.position.x_y_z
+        charger_pos = charger.pose.position.x_y_z
+
+        # Rotations of robot and charger in XY plane (i.e. on up-and-down Z-axis)
+        robot_rot_xy = robot.pose_angle.radians
+        charger_rot_xy = charger.pose.rotation.angle_z.radians
+
+        # Compute virtual target position
+        # This coordinate space is in Cozmo's head
+        virtual_pos = (
+            charger_pos[0] - charger_distance * math.cos(charger_rot_xy),
+            charger_pos[1] - charger_distance * math.sin(charger_rot_xy),
+            charger_pos[2],
+        )
+
+        # Direction and distance to target position (in front of charger)
+        distance = math.sqrt((virtual_pos[0] - robot_pos[0]) ** 2 + (virtual_pos[1] - robot_pos[1]) ** 2 + (
+                virtual_pos[2] - robot_pos[2]) ** 2)
+
+        # Angle of vector going from robot's origin to target's position
+        vec = (virtual_pos[0] - robot_pos[0], virtual_pos[1] - robot_pos[1], virtual_pos[2] - robot_pos[2])
+        theta_t = math.atan2(vec[1], vec[0])
+
+        # Face the target position
+        angle = self._charger_return_wrap_radians(theta_t - robot_rot_xy)
+        await robot.turn_in_place(cozmo.util.radians(angle)).wait_for_completed()
+
+        # Drive toward the target position
+        await robot.drive_straight(cozmo.util.distance_mm(distance),
+                                   cozmo.util.speed_mmps(speed)).wait_for_completed()
+
+        # Face the charger
+        angle = self._charger_return_wrap_radians(charger_rot_xy - theta_t)
+        await robot.turn_in_place(cozmo.util.radians(angle)).wait_for_completed()
+
+        try:
+            charger = await robot.world.wait_for_observed_charger(timeout=2, include_existing=True)
+        except cozmo.exceptions.CozmoSDKException:
+            print('Charger not seen, so can\'t verify positioning')
+
+        # Positions of robot and charger
+        robot_pos = robot.pose.position.x_y_z
+        charger_pos = charger.pose.position.x_y_z
+
+        # Rotations of robot and charger in XY plane (i.e. on up-and-down Z-axis)
+        robot_rot_xy = robot.pose_angle.radians
+        charger_rot_xy = charger.pose.rotation.angle_z.radians
+
+        # Compute virtual target position
+        # This coordinate space is in Cozmo's head
+        virtual_pos = (
+            charger_pos[0] - charger_distance * math.cos(charger_rot_xy),
+            charger_pos[1] - charger_distance * math.sin(charger_rot_xy),
+            charger_pos[2],
+        )
+
+        # Direction and distance to target position (in front of charger)
+        distance = math.sqrt((virtual_pos[0] - robot_pos[0]) ** 2 + (virtual_pos[1] - robot_pos[1]) ** 2 + (
+                virtual_pos[2] - robot_pos[2]) ** 2)
+
+        distance_tol = 5
+        angle_tol = 5 * math.pi / 180
+        if distance < distance_tol and math.fabs(robot_rot_xy - charger_rot_xy) < angle_tol:
+            print('Successfully aligned')
+        else:
+            print('Did not align successfully')  # TODO: Should we retry here?
+
+    @staticmethod
+    def _charger_return_wrap_radians(angle: float):
+        while angle >= 2 * math.pi:
+            angle -= 2 * math.pi
+        while angle <= -2 * math.pi:
+            angle += 2 * math.pi
+
+        if angle > math.pi:
+            angle -= 2 * math.pi
+        elif angle < -math.pi:
+            angle += 2 * math.pi
+
+        return angle
 
     async def _choreographer(self):
         """
