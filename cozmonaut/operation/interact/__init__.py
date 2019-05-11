@@ -3,7 +3,9 @@
 # Copyright 2019 The Cozmonaut Contributors
 #
 
+import argparse
 import asyncio
+import queue
 from enum import Enum
 from threading import Lock, Thread
 
@@ -25,6 +27,51 @@ class InteractMode(Enum):
     both = 1
     just_a = 2
     just_b = 3
+
+
+class _RobotState(Enum):
+    """
+    The state of a Cozmo robot in our little world.
+    """
+
+    # Safe and sound on its charger
+    home = 1
+
+    # On the way from charger to waypoint
+    home_to_waypoint = 2
+
+    # At its waypoint ready to work
+    waypoint = 3
+
+    # On the way from waypoint to charger
+    waypoint_to_home = 4
+
+    # Greeting visitors of the TLC
+    greet = 5
+
+    # Having a conversation with the other Cozmo
+    # The other Cozmo is assumed to be in its "home" state (not checked, though)
+    convo = 6
+
+    # Playing pong on its face
+    pong = 7
+
+    # Randomly playing on the table surface
+    freeplay = 8
+
+
+class _RobotAction(Enum):
+    """
+    An action that a Cozmo robot can do.
+
+    Actions bring about changes in state.
+    """
+
+    # Drive from the charger to the waypoint
+    drive_from_charger_to_waypoint = 1
+
+    # Drive from the waypoint to the charger
+    drive_from_waypoint_to_charger = 2
 
 
 class OperationInteract(Operation):
@@ -61,6 +108,14 @@ class OperationInteract(Operation):
         # The robot instances
         self._robot_a: cozmo.robot.Robot = None
         self._robot_b: cozmo.robot.Robot = None
+
+        # States for the robots
+        self._robot_state_a: _RobotState = None
+        self._robot_state_b: _RobotState = None
+
+        # Queues for robot actions
+        self._robot_queue_a = queue.Queue()
+        self._robot_queue_b = queue.Queue()
 
     def start(self):
         """
@@ -249,6 +304,10 @@ class OperationInteract(Operation):
             print('| IMPORTANT: We are assuming both Cozmos start on their chargers! |')
             print('+-----------------------------------------------------------------+')
 
+            # Assume both Cozmos start on their chargers (as advertised ^^^)
+            self._robot_state_a = _RobotState.home
+            self._robot_state_b = _RobotState.home
+
             asyncio.gather(
                 # The watchdog coroutine handles the shutdown protocol
                 self._watchdog(),
@@ -316,7 +375,6 @@ class OperationInteract(Operation):
         """
 
         # Convert robot index to robot letter
-        # This is only used for user-friendly log messages
         letter = 'A' if index == 1 else 'B'
 
         print(f'Driver for robot {letter} has started')
@@ -326,11 +384,70 @@ class OperationInteract(Operation):
             print(f'Robot {letter} is not available, so driver {letter} is stopping')
             return
 
+        # Get the action queue for the robot
+        action_queue = None
+        if index == 1:
+            action_queue = self._robot_queue_a
+        elif index == 2:
+            action_queue = self._robot_queue_b
+
         while not self._stopping:
+            # Try to get the next action
+            action: _RobotAction = None
+            try:
+                action = action_queue.get_nowait()
+            except queue.Empty:
+                pass
+
+            # If an action was dequeued
+            if action is not None:
+                if action == _RobotAction.drive_from_charger_to_waypoint:
+                    await self._do_drive_from_charger_to_waypoint(index, robot)
+                elif action == _RobotAction.drive_from_waypoint_to_charger:
+                    await self._do_drive_from_waypoint_to_charger(index, robot)
+
             # Yield control
             await asyncio.sleep(0)
 
         print(f'Driver for robot {letter} has stopped')
+
+    async def _do_drive_from_charger_to_waypoint(self, index: int, robot: cozmo.robot.Robot):
+        """
+        Action implementation for driving from charger to waypoint.
+
+        :param index: The robot index
+        :param robot: The robot instance
+        """
+
+        # Convert robot index to robot letter
+        letter = 'A' if index == 1 else 'B'
+
+        print(f'Robot {letter} is departing from charger and heading to waypoint')
+
+        # Update robot state
+        if index == 1:
+            self._robot_state_a = _RobotState.home_to_waypoint
+        elif index == 2:
+            self._robot_state_b = _RobotState.home_to_waypoint
+
+    async def _do_drive_from_waypoint_to_charger(self, index: int, robot: cozmo.robot.Robot):
+        """
+        Action implementation for driving from waypoint to charger.
+
+        :param index: The robot index
+        :param robot: The robot instance
+        """
+
+        # Convert robot index to robot letter
+        letter = 'A' if index == 1 else 'B'
+
+        print(f'Robot {letter} is departing from waypoint and heading to charger')
+
+        # Update robot state
+        if index == 1:
+            self._robot_state_a = _RobotState.waypoint_to_home
+        elif index == 2:
+            self._robot_state_b = _RobotState.waypoint_to_home
 
     async def _choreographer(self):
         """
@@ -340,10 +457,56 @@ class OperationInteract(Operation):
         print('Choreographer has started')
 
         while not self._stopping:
+            # TODO
+
             # Yield control
             await asyncio.sleep(0)
 
         print('Choreographer has stopped')
+
+    def _manual_advance(self, index: int):
+        """
+        Manually advance the given robot.
+
+        This drives the robot from its charger to its waypoint.
+
+        Thread-safe and non-blocking.
+
+        :param index: The robot index
+        """
+
+        # Get the action queue for the robot
+        queue = None
+        if index == 1:
+            queue = self._robot_queue_a
+        elif index == 2:
+            queue = self._robot_queue_b
+
+        # Drive from the charger to the waypoint
+        if queue is not None:
+            queue.put(_RobotAction.drive_from_charger_to_waypoint)
+
+    def _manual_return(self, index: int):
+        """
+        Manually return the given robot.
+
+        This drives the robot from its waypoint to its charger.
+
+        Thread-safe and non-blocking.
+
+        :param index: The robot index
+        """
+
+        # Get the action queue for the robot
+        queue = None
+        if index == 1:
+            queue = self._robot_queue_a
+        elif index == 2:
+            queue = self._robot_queue_b
+
+        # Drive from the waypoint to the charger
+        if queue is not None:
+            queue.put(_RobotAction.drive_from_waypoint_to_charger)
 
 
 class InteractInterface(cmd2.Cmd):
@@ -363,15 +526,118 @@ class InteractInterface(cmd2.Cmd):
 
         super().__init__()
 
+        # Opt out of cmd2's built-in cmdline handling
+        self.allow_cli_args = False
+
         # Keep the operation
         self._op = op
 
-        # Opt out of cmd2's built-in cmdline handling
-        self.allow_cli_args = False
+        # The selected robot index
+        self._selected_robot: int = None
 
     def sigint_handler(self, signum: int, frame):
         # Quit the interface
         self.onecmd_plus_hooks(['quit'])
+
+    select_parser = argparse.ArgumentParser()
+    select_parser.add_argument('robot', type=str, help='robot to select (a/b or 1/2 to select, all else deselects)')
+
+    @cmd2.with_argparser(select_parser)
+    def do_select(self, args):
+        """Change the selected Cozmo for future commands."""
+
+        # Get the requested robot index
+        self._selected_robot = self._robot_char_to_index(args.robot)
+
+        if self._selected_robot == 1:
+            print('Selected robot A')
+        elif self._selected_robot == 2:
+            print('Selected robot B')
+        else:
+            print('Deselected robot')
+
+    def do_selected(self, args):
+        """Query the selected robot."""
+
+        if self._selected_robot == 1:
+            print('Robot A is selected')
+        elif self._selected_robot == 2:
+            print('Robot B is selected')
+        else:
+            print('No robot selected')
+
+    state_parser = argparse.ArgumentParser()
+    state_parser.add_argument('robot', type=str, help='robot to query (a/b or 1/2, all else fails)')
+
+    @cmd2.with_argparser(state_parser)
+    def do_state(self, args):
+        """Query the state of a single robot."""
+
+        # Get the requested robot index
+        index = self._robot_char_to_index(args.robot)
+
+        # Get the robot state
+        state = None
+        if index == 1:  # Robot A
+            # noinspection PyProtectedMember
+            state = self._op._robot_state_a
+        elif index == 2:  # Robot B
+            # noinspection PyProtectedMember
+            state = self._op._robot_state_b
+        else:
+            print(f'Invalid robot: "{args.robot}"')
+
+        # Print name and number of state
+        if state is not None:
+            print(f'{state.value}: "{state.name}"')
+
+    def do_advance(self, args):
+        """Drive the selected Cozmo from its charger to its waypoint."""
+
+        # Require a robot to be selected
+        if self._selected_robot is None:
+            print('No robot selected')
+            return
+
+        print('Advancing selected robot from charger')
+
+        # noinspection PyProtectedMember
+        self._op._manual_advance(self._selected_robot)
+
+    def do_return(self, args):
+        """Drive the selected Cozmo from its waypoint to its charger."""
+
+        # Require a robot to be selected
+        if self._selected_robot is None:
+            print('No robot selected')
+            return
+
+        print('Returning selected robot to charger')
+
+        # noinspection PyProtectedMember
+        self._op._manual_return(self._selected_robot)
+
+    def do_converse(self, args):
+        """Start conversation activity."""
+        raise NotImplementedError
+
+    @staticmethod
+    def _robot_char_to_index(char: any) -> int:
+        """
+        Convert a robot character (e.g. 'a', 'B', '1', etc.) to its index.
+
+        On error, this function returns zero.
+
+        :param char: The robot character
+        :return: The robot index
+        """
+
+        if char == 'a' or char == 'A' or char == '1':
+            return 1
+        elif char == 'b' or char == 'B' or char == '2':
+            return 2
+        else:
+            return 0
 
 
 # Stay on the charger during the connection process
