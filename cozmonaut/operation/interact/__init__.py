@@ -37,14 +37,8 @@ class _RobotState(Enum):
     # Safe and sound on its charger
     home = 1
 
-    # On the way from charger to waypoint
-    home_to_waypoint = 2
-
     # At its waypoint ready to work
     waypoint = 3
-
-    # On the way from waypoint to charger
-    waypoint_to_home = 4
 
     # Greeting visitors of the TLC
     greet = 5
@@ -116,6 +110,10 @@ class OperationInteract(Operation):
         # Queues for robot actions
         self._robot_queue_a = queue.Queue()
         self._robot_queue_b = queue.Queue()
+
+        # Waypoints for the robots
+        self._robot_waypoint_a: cozmo.util.Pose = None
+        self._robot_waypoint_b: cozmo.util.Pose = None
 
     def start(self):
         """
@@ -384,36 +382,61 @@ class OperationInteract(Operation):
             print(f'Robot {letter} is not available, so driver {letter} is stopping')
             return
 
-        # Get the action queue for the robot
-        action_queue = None
+        # Get the state queue for the robot
+        state_queue = None
         if index == 1:
-            action_queue = self._robot_queue_a
+            state_queue = self._robot_queue_a
         elif index == 2:
-            action_queue = self._robot_queue_b
+            state_queue = self._robot_queue_b
 
         while not self._stopping:
-            # Try to get the next action
-            action: _RobotAction = None
+            # Yield control
+            await asyncio.sleep(0)
+
+            # Try to get the next state
+            state_next: _RobotState = None
             try:
-                action = action_queue.get_nowait()
+                state_next = state_queue.get_nowait()
             except queue.Empty:
                 pass
 
-            # If an action was dequeued
-            if action is not None:
-                if action == _RobotAction.drive_from_charger_to_waypoint:
-                    await self._do_drive_from_charger_to_waypoint(index, robot)
-                elif action == _RobotAction.drive_from_waypoint_to_charger:
-                    await self._do_drive_from_waypoint_to_charger(index, robot)
+            # If a state was dequeued
+            if state_next is not None:
+                # Get the current state
+                state_current = None
+                if index == 1:
+                    state_current = self._robot_state_a
+                elif index == 2:
+                    state_current = self._robot_state_b
 
-            # Yield control
-            await asyncio.sleep(0)
+                # The state we actually ended up going to
+                # By default, this is the current state
+                # On a successful transition, we'll update this
+                state_final = state_current
+
+                if state_current == _RobotState.home:
+                    if state_next == _RobotState.waypoint:
+                        # GOTO waypoint -> home
+                        state_final = state_next
+
+                        # Drive from the charger to the waypoint
+                        await self._do_drive_from_charger_to_waypoint(index, robot)
+
+                # If the state did not change
+                if state_final == state_current:
+                    print(f'Failed to transition from state "{state_current.name}" to state "{state_next.name}"')
+
+                # Update the current state
+                if index == 1:
+                    self._robot_state_a = state_final
+                elif index == 2:
+                    self._robot_state_b = state_final
 
         print(f'Driver for robot {letter} has stopped')
 
     async def _do_drive_from_charger_to_waypoint(self, index: int, robot: cozmo.robot.Robot):
         """
-        Action implementation for driving from charger to waypoint.
+        Action for driving from charger to waypoint.
 
         :param index: The robot index
         :param robot: The robot instance
@@ -424,15 +447,24 @@ class OperationInteract(Operation):
 
         print(f'Robot {letter} is departing from charger and heading to waypoint')
 
-        # Update robot state
+        # Drive off the charger contacts
+        await robot.drive_off_charger_contacts().wait_for_completed()
+
+        # Drive forward to the waypoint
+        await robot.drive_straight(
+            distance=cozmo.util.distance_mm(250),
+            speed=cozmo.util.speed_mmps(50),
+        ).wait_for_completed()
+
+        # Save robot waypoint
         if index == 1:
-            self._robot_state_a = _RobotState.home_to_waypoint
+            self._robot_waypoint_a = robot.pose
         elif index == 2:
-            self._robot_state_b = _RobotState.home_to_waypoint
+            self._robot_waypoint_b = robot.pose
 
     async def _do_drive_from_waypoint_to_charger(self, index: int, robot: cozmo.robot.Robot):
         """
-        Action implementation for driving from waypoint to charger.
+        Action for driving from waypoint to charger.
 
         :param index: The robot index
         :param robot: The robot instance
@@ -443,11 +475,7 @@ class OperationInteract(Operation):
 
         print(f'Robot {letter} is departing from waypoint and heading to charger')
 
-        # Update robot state
-        if index == 1:
-            self._robot_state_a = _RobotState.waypoint_to_home
-        elif index == 2:
-            self._robot_state_b = _RobotState.waypoint_to_home
+        # TODO: Add charger return code
 
     async def _choreographer(self):
         """
@@ -475,38 +503,16 @@ class OperationInteract(Operation):
         :param index: The robot index
         """
 
-        # Get the action queue for the robot
-        queue = None
+        # Get the state queue for the robot
+        state_queue = None
         if index == 1:
-            queue = self._robot_queue_a
+            state_queue = self._robot_queue_a
         elif index == 2:
-            queue = self._robot_queue_b
+            state_queue = self._robot_queue_b
 
         # Drive from the charger to the waypoint
-        if queue is not None:
-            queue.put(_RobotAction.drive_from_charger_to_waypoint)
-
-    def _manual_return(self, index: int):
-        """
-        Manually return the given robot.
-
-        This drives the robot from its waypoint to its charger.
-
-        Thread-safe and non-blocking.
-
-        :param index: The robot index
-        """
-
-        # Get the action queue for the robot
-        queue = None
-        if index == 1:
-            queue = self._robot_queue_a
-        elif index == 2:
-            queue = self._robot_queue_b
-
-        # Drive from the waypoint to the charger
-        if queue is not None:
-            queue.put(_RobotAction.drive_from_waypoint_to_charger)
+        if state_queue is not None:
+            state_queue.put(_RobotAction.drive_from_charger_to_waypoint)
 
 
 class InteractInterface(cmd2.Cmd):
@@ -601,8 +607,8 @@ class InteractInterface(cmd2.Cmd):
 
         print('Advancing selected robot from charger')
 
-        # noinspection PyProtectedMember
-        self._op._manual_advance(self._selected_robot)
+        # Go to waypoint state
+        self._get_robot_state_queue().put(_RobotState.waypoint)
 
     def do_return(self, args):
         """Drive the selected Cozmo from its waypoint to its charger."""
@@ -614,12 +620,22 @@ class InteractInterface(cmd2.Cmd):
 
         print('Returning selected robot to charger')
 
-        # noinspection PyProtectedMember
-        self._op._manual_return(self._selected_robot)
+        # Go to home state
+        self._get_robot_state_queue().put(_RobotState.home)
 
     def do_converse(self, args):
         """Start conversation activity."""
         raise NotImplementedError
+
+    def _get_robot_state_queue(self):
+        """Get the state queue for the selected robot."""
+
+        if self._selected_robot == 1:
+            # noinspection PyProtectedMember
+            return self._op._robot_queue_a
+        elif self._selected_robot == 2:
+            # noinspection PyProtectedMember
+            return self._op._robot_queue_b
 
     @staticmethod
     def _robot_char_to_index(char: any) -> int:
