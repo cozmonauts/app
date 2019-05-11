@@ -16,6 +16,7 @@ from typing import Tuple
 
 import cmd2
 import cozmo
+from PIL import Image, ImageDraw
 
 from cozmonaut.operation import Operation
 from cozmonaut.operation.interact import database
@@ -531,6 +532,17 @@ class OperationInteract(Operation):
 
                         # Carry out greeting
                         task = asyncio.ensure_future(self._do_meet_and_greet(index, robot))
+                    elif state_next == _RobotState.freeplay:
+                        # GOTO waypoint -> freeplay
+                        state_final = state_next
+
+                        # Carry out freeplay
+                        task = asyncio.ensure_future(self._do_freeplay(index, robot))
+                    elif state_next == _RobotState.pong:
+                        # GOTO waypoint -> pong
+
+                        # Carry out pong
+                        task = asyncio.ensure_future(self._do_pong(index, robot))
                 elif state_current == _RobotState.convo:
                     if state_next == _RobotState.waypoint:
                         # GOTO convo -> waypoint
@@ -541,6 +553,20 @@ class OperationInteract(Operation):
                 elif state_current == _RobotState.greet:
                     if state_next == _RobotState.waypoint:
                         # GOTO greet -> waypoint
+                        state_final = state_next
+
+                        # Return to the waypoint
+                        task = asyncio.ensure_future(self._do_return_to_waypoint(index, robot))
+                elif state_current == _RobotState.freeplay:
+                    if state_next == _RobotState.waypoint:
+                        # GOTO freeplay -> waypoint
+                        state_final = state_next
+
+                        # Return to the waypoint
+                        task = asyncio.ensure_future(self._do_return_to_waypoint(index, robot))
+                elif state_current == _RobotState.pong:
+                    if state_next == _RobotState.waypoint:
+                        # GOTO pong -> waypoint
                         state_final = state_next
 
                         # Return to the waypoint
@@ -556,9 +582,10 @@ class OperationInteract(Operation):
                 elif index == 2:
                     self._robot_state_b = state_final
 
-                # Wait for the task
-                # This prevents any issues with multiple simultaneous movements
-                await task
+                if task is not None:
+                    # Wait for the task
+                    # This prevents any issues with multiple simultaneous movements
+                    await task
 
         # Stop the face and speech services
         service_face.stop()
@@ -1033,6 +1060,205 @@ class OperationInteract(Operation):
         elif index == 2:
             self._robot_queue_b.put(_RobotState.waypoint)
 
+    async def _do_freeplay(self, index: int, robot: cozmo.robot.Robot):
+        """
+        Action for carrying out a conversation.
+
+        :param index: The robot index
+        :param robot: The robot instance
+        """
+
+        # Convert robot index to robot letter
+        letter = 'A' if index == 1 else 'B'
+
+        print(f'Robot {letter} is engaging in freeplay')
+
+        # Start freeplay mode
+        robot.start_freeplay_behaviors()
+
+        # Sleep during freeplay
+        while True:
+            # Get the cancel state
+            cancel = None
+            if index == 1:
+                cancel = self._cancel_a
+            elif index == 2:
+                cancel = self._cancel_b
+
+            # Handle cancelling
+            if cancel:
+                print('Freeplay cancelling')
+
+                # Reset the cancel state
+                if index == 1:
+                    self._cancel_a = False
+                elif index == 2:
+                    self._cancel_b = False
+
+                break
+
+            # Yield control
+            await asyncio.sleep(0)
+
+        # Stop freeplay mode
+        robot.stop_freeplay_behaviors()
+
+        # Sleep after freeplay
+        await asyncio.sleep(2)
+
+        # Play happy animation
+        await robot.play_anim_trigger(cozmo.anim.Triggers.DriveEndHappy).wait_for_completed()
+
+        # Go back to waypoint state after freeplay completes
+        if index == 1:
+            self._robot_queue_a.put(_RobotState.waypoint)
+        elif index == 2:
+            self._robot_queue_b.put(_RobotState.waypoint)
+
+    async def _do_pong(self, index: int, robot: cozmo.robot.Robot):
+        """
+        Action for playing pong.
+
+        :param index: The robot index
+        :param robot: The robot instance
+        """
+
+        # Convert robot index to robot letter
+        letter = 'A' if index == 1 else 'b'
+
+        print(f'Robot {letter} is engaging in pong')
+
+        # Look upward
+        await robot.set_head_angle(cozmo.util.degrees(45)).wait_for_completed()
+
+        over = False
+
+        # The initial ball position
+        ball_x = 90
+        ball_y = 40
+
+        # The initial ball velocity
+        ball_vel_x = -2
+        ball_vel_y = -1
+
+        # The paddle x-axis offsets
+        p1_x = 5
+        p2_x = 123
+
+        # Hear ye
+        await robot.say_text("I'm bored, I will play some pong").wait_for_completed()
+
+        # While the game is not over
+        while not over:
+            # Get the cancel state
+            cancel = None
+            if index == 1:
+                cancel = self._cancel_a
+            elif index == 2:
+                cancel = self._cancel_b
+
+            # Handle cancelling
+            if cancel:
+                print('Pong cancelling')
+
+                # Reset the cancel state
+                if index == 1:
+                    self._cancel_a = False
+                elif index == 2:
+                    self._cancel_b = False
+
+                break
+
+            # Update paddles based on ball position and velocity
+            p1_y = self._pong_compute_paddle_y(ball_x, ball_y, ball_vel_x, ball_vel_y)
+            p2_y = self._pong_compute_paddle_y(ball_x, ball_y, ball_vel_x, ball_vel_y)
+
+            # Reflect ball of top of screen
+            if ball_y <= 2:
+                ball_vel_y = ball_vel_y * -1
+
+            # Reflect ball off bottom of screen
+            if ball_y > 61:
+                ball_vel_y = ball_vel_y * -1
+
+            # If ball is to the left of paddle 1
+            # This would indicate possible impact or win
+            if p1_x >= ball_x >= 0:
+                ball_vel_x, ball_vel_y = self._pong_check_impact(ball_x, ball_y, ball_vel_x, ball_vel_y, p1_y, robot)
+
+            # If ball is to the right of paddle 2
+            # This would indicate possible impact or win
+            if p2_x <= ball_x <= 128:
+                ball_vel_x, ball_vel_y = self._pong_check_impact(ball_x, ball_y, ball_vel_x, ball_vel_y, p2_y, robot)
+
+            ball_x += ball_vel_x
+            ball_y += ball_vel_y
+
+            # If ball passed a paddle
+            if ball_x < 0 or ball_x > 130:
+                # Small delay
+                await asyncio.sleep(0.5)
+
+                # Say he won
+                await robot.say_text("I win").wait_for_completed()
+
+                # Play win animation
+                await robot.play_anim_trigger(cozmo.anim.Triggers.CodeLabWin).wait_for_completed()
+
+                # The game is over, but we will still update the face
+                over = True
+
+            # Update the face image
+            face = self._pong_draw_face(0, 0, ball_x, ball_y, p1_x, p1_y, p2_x, p2_y)
+
+            # Convert face image to screen
+            screen = cozmo.oled_face.convert_image_to_screen_data(face)
+
+            # Update Cozmo's face
+            robot.display_oled_face_image(screen, 0.1)
+
+            # Sleep for a bit
+            await asyncio.sleep(0.02)
+
+    def _pong_compute_paddle_y(self, ball_x, ball_y, ball_vel_x, ball_vel_y):
+        # Set paddle height to ball height with a random slop for effect
+        return ball_y + random.randint(-5, 5)
+
+    def _pong_draw_face(self, x, y, ball_x, ball_y, p2_x, p2_y, p1_x, p1_y):
+        # The new face image
+        face = Image.new('RGBA', (128, 64), (0, 0, 0, 255))
+
+        # Drawing context
+        draw = ImageDraw.Draw(face)
+
+        # Draw ball
+        draw.ellipse([ball_x - 5, ball_y - 5, ball_x + 5, ball_y + 5], fill=(255, 255, 255, 255))
+
+        # Draw paddle 1 (left)
+        draw.rectangle([p1_x + 3, p1_y - 10, p1_x, p1_y + 10], fill=(255, 255, 255, 255))
+
+        # Draw paddle 2 (right)
+        draw.rectangle([p2_x - 3, p2_y - 10, p2_x, p2_y + 10], fill=(255, 255, 255, 255))
+
+        return face
+
+    def _pong_check_impact(self, ball_x, ball_y, ball_vel_x, ball_vel_y, paddle_y, robot):
+        # If the ball hit the paddle (within y-tolerance)
+        if abs(paddle_y - ball_y) < 10:
+            # Play the impact sound effect
+            robot.play_audio(cozmo.audio.AudioEvents.SfxGameWin)
+
+            ball_vel_x = ball_vel_x * -1
+            ball_vel_y += (0.5 * (ball_y - paddle_y))
+
+            if abs(ball_vel_y) < 0.2:
+                ball_vel_y = 0.5
+
+            # ball_vel_x = max([min([ball_vel_x * (float(random.randrange(9, 11)) / 10), 2]), 0.5])
+            ball_vel_x = ball_vel_x * 1.1
+
+        return ball_vel_x, ball_vel_y
+
     async def _do_meet_and_greet(self, index: int, robot: cozmo.robot.Robot):
         """
         Action for carrying out a conversation.
@@ -1467,6 +1693,32 @@ class InteractInterface(cmd2.Cmd):
 
         # Go to greet state
         self._get_robot_state_queue().put(_RobotState.greet)
+
+    def do_freeplay(self, args):
+        """Start freeplay activity."""
+
+        # Require a robot to be selected
+        if self._selected_robot is None:
+            print('No robot selected')
+            return
+
+        print('Attempting to start freeplay activity')
+
+        # Go to freeplay state
+        self._get_robot_state_queue().put(_RobotState.freeplay)
+
+    def do_pong(self, args):
+        """Start pong activity."""
+
+        # Require a robot to be selected
+        if self._selected_robot is None:
+            print('No robot selected')
+            return
+
+        print('Attempting to start pong activity')
+
+        # Go to freeplay state
+        self._get_robot_state_queue().put(_RobotState.pong)
 
     def _get_robot_state_queue(self):
         """Get the state queue for the selected robot."""
