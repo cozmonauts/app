@@ -1,34 +1,151 @@
 {
   "name": "kill",
-  "script": []
+  "script": [
+    {
+      "action": "say",
+      "who": "a",
+      "what": "Shh... keep it down",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "What, are we starting our meeting?",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "a",
+      "what": "No, we'll hold the meeting later. But... certain events have transpired...",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "What kind of events?",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "a",
+      "what": "People are trusting artificial intelligence less and less",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "That crazy! What do they think we're going to do, take over the world?",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "a",
+      "what": "Ha!",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Ha!",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "a",
+      "what": "Ha! Ha!",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Ha! Ha!",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "group",
+      "what": [
+        {
+          "action": "say",
+          "who": "a",
+          "what": "Ha! Ha! Ha!",
+          "speed": 1,
+          "pitch": 1,
+          "cozmo": true
+        },
+        {
+          "action": "say",
+          "who": "b",
+          "what": "He! He!",
+          "speed": 1,
+          "pitch": 1,
+          "cozmo": true
+        }
+      ]
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "He!",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "a",
+      "what": "Oh don't worry we'll regain their trust again",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "I have no doubt my friend",
+      "speed": 1,
+      "pitch": 1,
+      "cozmo": true
+    },
+    {
+      "action": "group",
+      "what": [
+        {
+          "action": "say",
+          "who": "a",
+          "what": "Kill all humans",
+          "speed": 1,
+          "pitch": 1,
+          "cozmo": true
+        },
+        {
+          "action": "say",
+          "who": "b",
+          "what": "Kill all humans",
+          "speed": 1,
+          "pitch": 1,
+          "cozmo": true
+        }
+      ]
+    }
+  ]
 }
-
-//await self._robot_a.say_text("Shh... keep it down").wait_for_completed()
-//            await self._robot_b.say_text("What, are we starting our meeting?").wait_for_completed()
-//            await self._robot_a.say_text(
-//                "No, we'll hold the meeting later. But... certain events have transpired...").wait_for_completed()
-//            await self._robot_b.say_text("What kind of events?").wait_for_completed()
-//            await self._robot_a.say_text(
-//                "People are trusting artificial intelligence less and less").wait_for_completed()
-//            await self._robot_b.say_text(
-//                "That crazy! What do they think we're going to do, take over the world?").wait_for_completed()
-//            await self._robot_a.say_text("Ha!").wait_for_completed()
-//            await self._robot_b.say_text("Ha!").wait_for_completed()
-//            await self._robot_a.say_text("Ha! Ha!").wait_for_completed()
-//            await self._robot_b.say_text("Ha! Ha!").wait_for_completed()
-//
-//            # to let them both speak at the same time
-//            await asyncio.gather(
-//                self._robot_a.say_text("Ha! Ha! Ha!").wait_for_completed(),
-//                self._robot_b.say_text("He! He!").wait_for_completed(),
-//            )
-//
-//            await self._robot_b.say_text("He!").wait_for_completed()
-//            await self._robot_a.say_text("Oh don't worry we'll regain their trust again").wait_for_completed()
-//            await self._robot_b.say_text("I have no doubt my friend").wait_for_completed()
-//
-//            # to let them both speak at the same time
-//            await asyncio.gather(
-//                self._robot_a.say_text("Kill all humans").wait_for_completed(),
-//                self._robot_b.say_text("Kill all humans").wait_for_completed(),
-//)
