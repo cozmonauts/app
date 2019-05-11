@@ -1,0 +1,117 @@
+{
+  "name": "starWars",
+  "script": [
+    {
+      "action": "say",
+      "who": "a",
+      "what": "You have learned much, young one",
+      "speed": 1,
+      "pitch": 0.5,
+      "human": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "You'll find I'm full or surprises",
+      "speed": 1,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "a",
+      "what": "Your destiny lies with me, Skywalker. Obi-Wan knew this to be true",
+      "speed": 1,
+      "pitch": 0.5,
+      "human": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "No!",
+      "speed": 1,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "a",
+      "what": "There is no escape. Don’t make me destroy you. You do not yet realize your importance.",
+      "speed": 1,
+      "pitch": 0.5,
+      "human": true
+    },
+	{
+      "action": "say",
+      "who": "a",
+      "what": "You have only begun to discover your power. Join me and I will complete your training.",
+      "speed": 1,
+      "pitch": 0.5,
+      "human": true
+    },
+	{
+      "action": "say",
+      "who": "a",
+      "what": "With our combined strength, we can end this destructive conflict and bring order to the galaxy.",
+      "speed": 1,
+      "pitch": 0.5,
+      "human": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "I'll never join you!",
+      "speed": 1,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "a",
+      "what": "If you only knew the power of the dark side. Obi-Wan never told you what happened to your father",
+      "speed": 1,
+      "pitch": 0.5,
+      "human": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "He told me enough! He told me you killed him!",
+      "speed": 1,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "a",
+      "what": "No. I am your father.",
+      "speed": 1,
+      "pitch": 0.5,
+      "human": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "No. No. That's not true! That's impossible!",
+      "speed": 1,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "a",
+      "what": "Search your feelings. You know it to be true.",
+      "speed": 1,
+      "pitch": 0.5,
+      "human": true
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Nooooooooooooooooooooooooooooooooooo!!!",
+      "speed": 1,
+      "pitch": 1,
+      "human": false
+    }
+  ]
+}
