@@ -14,6 +14,7 @@ import cmd2
 import cozmo
 
 from cozmonaut.operation import Operation
+from cozmonaut.operation.interact.service.convo import ServiceConvo
 
 
 class InteractMode(Enum):
@@ -71,10 +72,21 @@ class _RobotAction(Enum):
 
 class OperationInteract(Operation):
     """
-    An abstract operation.
+    The interact operation.
     """
 
     def __init__(self, args: dict):
+        """
+        Initialize the interact operation.
+
+        Operation arguments:
+          - sera (str) Serial number for robot A
+          - serb (str) Serial number for robot B
+          - mode (str) One of 'just_a', 'just_b', or 'both'
+
+        :param args: The arguments as described
+        """
+
         super().__init__(args)
 
         # Unpack wanted serial numbers
@@ -99,6 +111,9 @@ class OperationInteract(Operation):
 
         # An indicator telling if the operation is in the middle of stopping (not thread-safe)
         self._stopping = False
+
+        # The services we need
+        self._service_convo = ServiceConvo()
 
         # The robot instances
         self._robot_a: cozmo.robot.Robot = None
@@ -421,14 +436,24 @@ class OperationInteract(Operation):
                         state_final = state_next
 
                         # Drive from the charger to the waypoint
-                        await self._do_drive_from_charger_to_waypoint(index, robot)
+                        asyncio.ensure_future(self._do_drive_from_charger_to_waypoint(index, robot))
                 elif state_current == _RobotState.waypoint:
                     if state_next == _RobotState.home:
                         # GOTO waypoint -> home
                         state_final = state_next
 
                         # Drive from the waypoint to the charger
-                        await self._do_drive_from_waypoint_to_charger(index, robot)
+                        asyncio.ensure_future(self._do_drive_from_waypoint_to_charger(index, robot))
+                    elif state_next == _RobotState.convo:
+                        # GOTO waypoint -> convo
+                        state_final = state_next
+
+                        # Carry out the conversation
+                        asyncio.ensure_future(self._do_convo(index, robot))
+                elif state_current == _RobotState.convo:
+                    if state_next == _RobotState.waypoint:
+                        # GOTO convo -> waypoint
+                        state_final = state_next
 
                 # If the state did not change
                 if state_final == state_current:
@@ -482,16 +507,6 @@ class OperationInteract(Operation):
         letter = 'A' if index == 1 else 'B'
 
         print(f'Robot {letter} is departing from waypoint and heading to charger')
-
-        # Get robot waypoint
-        #waypoint = None
-        #if index == 1:
-        #    waypoint = self._robot_waypoint_a
-        #elif index == 2:
-        #    waypoint = self._robot_waypoint_b
-
-        # Return to the saved waypoint (based on Eric's routine)
-        #await robot.go_to_pose(waypoint).wait_for_completed()
 
         # Turn toward the charger
         await robot.turn_in_place(cozmo.util.degrees(180)).wait_for_completed()
@@ -748,8 +763,11 @@ class OperationInteract(Operation):
         )
 
         # Direction and distance to target position (in front of charger)
-        distance = math.sqrt((virtual_pos[0] - robot_pos[0]) ** 2 + (virtual_pos[1] - robot_pos[1]) ** 2 + (
-                virtual_pos[2] - robot_pos[2]) ** 2)
+        distance = math.sqrt(
+            (virtual_pos[0] - robot_pos[0]) ** 2 +
+            (virtual_pos[1] - robot_pos[1]) ** 2 +
+            (virtual_pos[2] - robot_pos[2]) ** 2
+        )
 
         # Angle of vector going from robot's origin to target's position
         vec = (virtual_pos[0] - robot_pos[0], virtual_pos[1] - robot_pos[1], virtual_pos[2] - robot_pos[2])
@@ -789,11 +807,15 @@ class OperationInteract(Operation):
         )
 
         # Direction and distance to target position (in front of charger)
-        distance = math.sqrt((virtual_pos[0] - robot_pos[0]) ** 2 + (virtual_pos[1] - robot_pos[1]) ** 2 + (
-                virtual_pos[2] - robot_pos[2]) ** 2)
+        distance = math.sqrt(
+            (virtual_pos[0] - robot_pos[0]) ** 2 +
+            (virtual_pos[1] - robot_pos[1]) ** 2 +
+            (virtual_pos[2] - robot_pos[2]) ** 2
+        )
 
         distance_tol = 5
         angle_tol = 5 * math.pi / 180
+
         if distance < distance_tol and math.fabs(robot_rot_xy - charger_rot_xy) < angle_tol:
             print('Successfully aligned')
         else:
@@ -812,6 +834,37 @@ class OperationInteract(Operation):
             angle += 2 * math.pi
 
         return angle
+
+    async def _do_convo(self, index: int, robot: cozmo.robot.Robot):
+        """
+        Action for carrying out a conversation.
+
+        Data:
+          - name (str) The conversation name
+
+        :param index: The robot index
+        :param robot: The robot instance
+        """
+
+        # Convert robot index to robot letter
+        letter = 'A' if index == 1 else 'B'
+
+        print(f'Robot {letter} is engaging in conversation')
+
+        # Get the requested conversation
+        name = None
+        if index == 1:
+            name = self._robot_queue_a.get()
+        elif index == 2:
+            name = self._robot_queue_b.get()
+
+        print(f'We would do {name}')
+
+        # Go back to waypoint state after conversation completes
+        if index == 1:
+            self._robot_queue_a.put(_RobotState.waypoint)
+        elif index == 2:
+            self._robot_queue_b.put(_RobotState.waypoint)
 
     async def _choreographer(self):
         """
@@ -877,6 +930,10 @@ class InteractInterface(cmd2.Cmd):
         # The selected robot index
         self._selected_robot: int = None
 
+        # Our own conversation service
+        # We use this to offer tab completions
+        self._service_convo = ServiceConvo()
+
     def sigint_handler(self, signum: int, frame):
         # Quit the interface
         self.onecmd_plus_hooks(['quit'])
@@ -941,7 +998,7 @@ class InteractInterface(cmd2.Cmd):
             print('No robot selected')
             return
 
-        print('Advancing selected robot from charger')
+        print('Attempting to advance selected robot from charger')
 
         # Go to waypoint state
         self._get_robot_state_queue().put(_RobotState.waypoint)
@@ -954,14 +1011,30 @@ class InteractInterface(cmd2.Cmd):
             print('No robot selected')
             return
 
-        print('Returning selected robot to charger')
+        print('Attempting to return selected robot to charger')
 
         # Go to home state
         self._get_robot_state_queue().put(_RobotState.home)
 
-    def do_converse(self, args):
+    convo_parser = argparse.ArgumentParser()
+    convo_parser.add_argument('name', type=str, help='the conversation name')
+
+    @cmd2.with_argparser(convo_parser)
+    def do_convo(self, args):
         """Start conversation activity."""
-        raise NotImplementedError
+
+        # Require a robot to be selected
+        if self._selected_robot is None:
+            print('No robot selected')
+            return
+
+        print('Attempting to start conversation activity')
+        print(f'Requesting conversation "{args.name}"')
+
+        # Go to convo state
+        queue = self._get_robot_state_queue()
+        queue.put(_RobotState.convo)
+        queue.put(args.name)
 
     def _get_robot_state_queue(self):
         """Get the state queue for the selected robot."""
