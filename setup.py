@@ -46,7 +46,9 @@ setup(
         'cozmo',
         'docopt',
         'dlib',
+        'mysql-connector-python',
         'numpy',
+        'opencv-python',
         'pillow',
     ],
     classifiers=[

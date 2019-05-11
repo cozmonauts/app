@@ -5,16 +5,24 @@
 
 import argparse
 import asyncio
+import functools
+import json
 import math
 import queue
+import random
 from enum import Enum
 from threading import Lock, Thread
+from typing import Tuple
 
 import cmd2
 import cozmo
 
 from cozmonaut.operation import Operation
+from cozmonaut.operation.interact import database
+from cozmonaut.operation.interact.face_tracker import FaceTracker, DetectedFace, RecognizedFace
 from cozmonaut.operation.interact.service.convo import ServiceConvo
+from cozmonaut.operation.interact.service.face import ServiceFace
+from cozmonaut.operation.interact.service.speech import ServiceSpeech
 
 
 class InteractMode(Enum):
@@ -112,8 +120,20 @@ class OperationInteract(Operation):
         # An indicator telling if the operation is in the middle of stopping (not thread-safe)
         self._stopping = False
 
-        # The services we need
+        # Indicators telling if the current activity should cancel for each Cozmo robot
+        self._cancel_a = False
+        self._cancel_b = False
+
+        # The conversation service
         self._service_convo = ServiceConvo()
+
+        # The face service for robot
+        self._service_face_a = ServiceFace()
+        self._service_face_b = ServiceFace()
+
+        # The speech service for robot
+        self._service_speech_a = ServiceSpeech()
+        self._service_speech_b = ServiceSpeech()
 
         # The robot instances
         self._robot_a: cozmo.robot.Robot = None
@@ -339,8 +359,41 @@ class OperationInteract(Operation):
                 loop=loop,
             )
 
+            print('Setting up face trackers')
+
+            # Create face trackers
+            self._face_tracker_a = FaceTracker()
+            self._face_tracker_b = FaceTracker()
+
+            print('Loading known faces from database')
+
+            # Query known faces from database
+            known_faces = database.loadStudents()
+
+            # If there are known faces
+            if known_faces is not None:
+                # Loop through them
+                # We received their IDs and string-encoded identities from the database
+                for (fid, ident_enc) in known_faces:
+                    # Decode string-encoded identity
+                    # The result is a 128-tuple of 64-bit floats
+                    ident = self._face_ident_decode(ident_enc)
+
+                    # Register identity with both face trackers
+                    # That way both Cozmos will be able to recognize the face
+                    self._face_tracker_a.add_identity(fid, ident)
+                    self._face_tracker_b.add_identity(fid, ident)
+
+            # Stop the face trackers
+            self._face_tracker_a.start()
+            self._face_tracker_b.start()
+
             # Run the event loop until it stops (it's not actually forever)
             loop.run_forever()
+
+            # Stop the face trackers
+            self._face_tracker_a.stop()
+            self._face_tracker_b.stop()
 
             print('Goodbye!')
         finally:
@@ -398,12 +451,31 @@ class OperationInteract(Operation):
             print(f'Robot {letter} is not available, so driver {letter} is stopping')
             return
 
-        # Get the state queue for the robot
+        # Enable color imaging on the robot
+        robot.camera.color_image_enabled = True
+        robot.camera.image_stream_enabled = True
+
+        # Listen for camera frames from this Cozmo
+        # We create a partially-bound function that sneaks in our index and robot parameters
+        robot.camera.add_event_handler(cozmo.robot.camera.EvtNewRawCameraImage,
+                                       functools.partial(self._driver_on_evt_new_raw_camera_image, index, robot))
+
+        # Get the robot-specific data
         state_queue = None
+        service_face = None
+        service_speech = None
         if index == 1:
             state_queue = self._robot_queue_a
+            service_face = self._service_face_a
+            service_speech = self._service_speech_a
         elif index == 2:
             state_queue = self._robot_queue_b
+            service_face = self._service_face_b
+            service_speech = self._service_speech_b
+
+        # Start the face and speech services
+        service_face.start()
+        service_speech.start()
 
         while not self._stopping:
             # Yield control
@@ -453,9 +525,22 @@ class OperationInteract(Operation):
 
                         # Carry out the conversation
                         task = asyncio.ensure_future(self._do_convo(index, robot))
+                    elif state_next == _RobotState.greet:
+                        # GOTO waypoint -> greet
+                        state_final = state_next
+
+                        # Carry out greeting
+                        task = asyncio.ensure_future(self._do_meet_and_greet(index, robot))
                 elif state_current == _RobotState.convo:
                     if state_next == _RobotState.waypoint:
                         # GOTO convo -> waypoint
+                        state_final = state_next
+
+                        # Return to the waypoint
+                        task = asyncio.ensure_future(self._do_return_to_waypoint(index, robot))
+                elif state_current == _RobotState.greet:
+                    if state_next == _RobotState.waypoint:
+                        # GOTO greet -> waypoint
                         state_final = state_next
 
                         # Return to the waypoint
@@ -475,7 +560,37 @@ class OperationInteract(Operation):
                 # This prevents any issues with multiple simultaneous movements
                 await task
 
+        # Stop the face and speech services
+        service_face.stop()
+        service_speech.stop()
+
         print(f'Driver for robot {letter} has stopped')
+
+    def _driver_on_evt_new_raw_camera_image(self, index: int, robot: cozmo.robot.Robot,
+                                            evt: cozmo.robot.camera.EvtNewRawCameraImage, **kwargs):
+        """
+        Called by the Cozmo SDK when a camera frame comes in.
+
+        :param index: The robot index
+        :param robot: The robot instance
+        :param evt: The handled event
+        :param kwargs: Excess keyword arguments
+        """
+
+        # The camera frame image
+        image = evt.image
+
+        # The face tracker for this Cozmo robot
+        tracker: FaceTracker = None
+
+        # Pick the corresponding face tracker
+        if index == 1:
+            tracker = self._face_tracker_a
+        elif index == 2:
+            tracker = self._face_tracker_b
+
+        # Update the Cozmo-corresponding tracker with the new camera frame
+        tracker.update(image)
 
     async def _do_drive_from_charger_to_waypoint(self, index: int, robot: cozmo.robot.Robot):
         """
@@ -880,18 +995,254 @@ class OperationInteract(Operation):
             print(f'There is no conversation named "{name}"')
         else:
             # Perform the conversation
-            await convo.perform(
+            fut = asyncio.ensure_future(convo.perform(
                 # One of these may be None, but that's okay
                 # The service will take care of handling that
                 robot_a=self._robot_a,
                 robot_b=self._robot_b,
-            )
+            ))
+
+            # While the conversation is in progress
+            while not fut.done():
+                # Get the cancel state
+                cancel = None
+                if index == 1:
+                    cancel = self._cancel_a
+                elif index == 2:
+                    cancel = self._cancel_b
+
+                # Handle cancelling
+                if cancel:
+                    print('Conversation cancelling')
+
+                    # Reset the cancel state
+                    if index == 1:
+                        self._cancel_a = False
+                    elif index == 2:
+                        self._cancel_b = False
+
+                    broken = True
+                    break
+
+                # Yield control
+                await asyncio.sleep(0)
 
         # Go back to waypoint state after conversation completes
         if index == 1:
             self._robot_queue_a.put(_RobotState.waypoint)
         elif index == 2:
             self._robot_queue_b.put(_RobotState.waypoint)
+
+    async def _do_meet_and_greet(self, index: int, robot: cozmo.robot.Robot):
+        """
+        Action for carrying out a conversation.
+
+        :param index: The robot index
+        :param robot: The robot instance
+        """
+
+        # Convert robot index to robot letter
+        letter = 'A' if index == 1 else 'B'
+
+        print(f'Robot {letter} is engaging in greeting')
+
+        # Get the robot-specific services
+        service_face = None
+        service_speech = None
+        face_tracker = None
+        if index == 1:
+            service_face = self._service_face_a
+            service_speech = self._service_speech_a
+            face_tracker = self._face_tracker_a
+        elif index == 2:
+            service_face = self._service_face_b
+            service_speech = self._service_speech_b
+            face_tracker = self._face_tracker_b
+
+        # Tilt the head upward to look for faces
+        await robot.set_head_angle(cozmo.robot.MAX_HEAD_ANGLE).wait_for_completed()
+
+        broken = False
+        while not self._stopping and not broken:
+            print('Waiting to detect a face')
+
+            # Get the cancel state
+            cancel = None
+            if index == 1:
+                cancel = self._cancel_a
+            elif index == 2:
+                cancel = self._cancel_b
+
+            # Handle cancelling
+            if cancel:
+                print('Meet and greet cancelling')
+
+                # Reset the cancel state
+                if index == 1:
+                    self._cancel_a = False
+                elif index == 2:
+                    self._cancel_b = False
+
+                broken = True
+                break
+
+            # Submit a work order to detect a face (on a background thread)
+            # Keeping it in concurrent future form will let us cancel it easily
+            face_det_future = face_tracker.next_track()
+
+            # While detection is not done
+            while not face_det_future.done():
+                # Get the cancel state
+                cancel = None
+                if index == 1:
+                    cancel = self._cancel_a
+                elif index == 2:
+                    cancel = self._cancel_b
+
+                # Handle cancelling
+                if cancel:
+                    print('Meet and greet cancelling')
+
+                    # Reset the cancel state
+                    if index == 1:
+                        self._cancel_a = False
+                    elif index == 2:
+                        self._cancel_b = False
+
+                    broken = True
+                    break
+
+                # Yield control
+                await asyncio.sleep(0)
+
+            if broken:
+                break
+
+            # The detected face
+            face_det: DetectedFace = face_det_future.result()
+
+            # The index of the tracked face
+            # These are unique through time, so we'll never see this exact index again
+            # (well, unless we get a signed 64-bit integer overflow)
+            face_index = face_det.index
+
+            # The coordinates of the detected face
+            # This is a 4-tuple of the form (left, top, right, and bottom) with int components
+            face_coords = face_det.coords
+
+            print(f'Detected face {face_index} at {face_coords}')
+
+            # TODO: Center on the face
+
+            # Submit a work order to recognize the detected face (uses a background thread)
+            # The face tracker is holding onto the original picture of the detected face
+            # FIXME: This might actually be bad, as the detection is more lenient than recognition
+            #  The detector might pick up a motion-blurred face, but then recognition might be bad
+            #  This is not a priority for the group presentation, however, as we can control how fast we turn
+            face_rec: RecognizedFace = await asyncio.wrap_future(face_tracker.recognize(face_index))
+
+            # The face ID
+            # This corresponds to the ID assigned to the matched face identity during program startup
+            # In our implementation, this is the AUTO_INCREMENT field in the database table
+            face_id = face_rec.fid
+
+            # The face identity
+            # This is a 128-tuple of doubles for the face vector (AKA encoding, embedding, descriptor, etc.)
+            face_ident = face_rec.ident
+
+            print(f'Recognized face {face_index} at {face_coords} as ID {face_id}')
+
+            if face_id == -1:
+                print('We do not know this face')
+
+                # Ask for a name
+                num = random.randrange(3)
+                if num == 0:
+                    await robot.say_text('Who are you?').wait_for_completed()
+                elif num == 1:
+                    await robot.say_text('What is your name?').wait_for_completed()
+                elif num == 2:
+                    await robot.say_text('Please type your name.').wait_for_completed()
+
+                # Get the name of the face
+                # This is implemented as either speech recognition or console input
+                # Whichever one is used depends on user preferences (but just control input)
+                print('PLEASE PRESS THE ENTER KEY')
+                name = input('NAME: ')
+
+                # Encode the identity to a string for storage in the database
+                face_ident_enc = self._face_ident_encode(face_ident)
+
+                # Insert face into the database and get the assigned face ID (thanks Herman, this is easy to use)
+                face_id = database.insertNewStudent(name, face_ident_enc)
+
+                # Add identity to both Cozmo A and B face trackers
+                # This lets us recognize this face again in the same session
+                # On subsequent sessions, we'll read from the database
+                self._face_tracker_a.add_identity(face_id, face_ident)
+                self._face_tracker_b.add_identity(face_id, face_ident)
+
+                # Repeat the name
+                num = random.randrange(3)
+                if num == 0:
+                    await robot.say_text(f'Hi, {name}!').wait_for_completed()
+                elif num == 1:
+                    await robot.say_text(f'Hello there, {name}!').wait_for_completed()
+                elif num == 2:
+                    await robot.say_text(f'Nice to meet you, {name}!').wait_for_completed()
+            else:
+                print('We know this face')
+
+                # Get name and time last seen for this face
+                name, time_last_seen = database.determineStudent(face_id)
+
+                # Update time last seen for face
+                database.checkForStudent(face_id)
+
+                # TODO: Maybe we can add some "welcome back"-style messages that use the time last seen!
+
+                # Welcome the person back
+                num = random.randrange(3)
+                if num == 0:
+                    await robot.say_text(f'Welcome back, {name}!').wait_for_completed()
+                elif num == 1:
+                    await robot.say_text(f'Hello again, {name}!').wait_for_completed()
+                elif num == 2:
+                    await robot.say_text(f'Good to see you, {name}!').wait_for_completed()
+
+        # Go back to waypoint state after conversation completes
+        if index == 1:
+            self._robot_queue_a.put(_RobotState.waypoint)
+        elif index == 2:
+            self._robot_queue_b.put(_RobotState.waypoint)
+
+    @staticmethod
+    def _face_ident_decode(ident_enc: str) -> Tuple[float, ...]:
+        """
+        Decode a string-encoded face identity.
+
+        :param ident_enc: The encoded identity
+        :return: The decoded identity
+        """
+
+        # Load the 128-tuple of floats from JSON
+        ident = json.loads(ident_enc)
+
+        return ident
+
+    @staticmethod
+    def _face_ident_encode(ident: Tuple[float, ...]) -> str:
+        """
+        Encode a face identity to string.
+
+        :param ident: The decoded identity
+        :return: The encoded identity
+        """
+
+        # Dump the 128-tuple of floats into JSON
+        ident_json = json.dumps(ident)
+
+        return ident_json
 
     async def _do_return_to_waypoint(self, index: int, robot: cozmo.robot.Robot):
         """
@@ -1040,6 +1391,24 @@ class InteractInterface(cmd2.Cmd):
         if state is not None:
             print(f'{state.value}: "{state.name}"')
 
+    def do_cancel(self, args):
+        """Cancel the activity on the selected Cozmo robot."""
+
+        # Require a robot to be selected
+        if self._selected_robot is None:
+            print('No robot selected')
+            return
+
+        print('Cancelling the activity')
+
+        # Set the appropriate cancel flag
+        if self._selected_robot == 1:  # Robot A
+            # noinspection PyProtectedMember
+            self._op._cancel_a = True
+        elif self._selected_robot == 2:  # Robot B
+            # noinspection PyProtectedMember
+            self._op._cancel_b = True
+
     def do_advance(self, args):
         """Drive the selected Cozmo from its charger to its waypoint."""
 
@@ -1085,6 +1454,19 @@ class InteractInterface(cmd2.Cmd):
         queue = self._get_robot_state_queue()
         queue.put(_RobotState.convo)
         queue.put(args.name)
+
+    def do_greet(self, args):
+        """Start meet and greet activity."""
+
+        # Require a robot to be selected
+        if self._selected_robot is None:
+            print('No robot selected')
+            return
+
+        print('Attempting to start meet and greet activity')
+
+        # Go to greet state
+        self._get_robot_state_queue().put(_RobotState.greet)
 
     def _get_robot_state_queue(self):
         """Get the state queue for the selected robot."""

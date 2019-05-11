@@ -22,19 +22,15 @@ def doSomething():
         robot.go_to_pose(my_waypoint).wait_for_completed()
 
     #starts a random conversation using startConver function
-    else if randomEvent == 2:
+    elif randomEvent == 2:
         robot.drive_straight(distance_mm(200), speed_mmps(50)).wait_for_completed()
         robot.turn_in_place(degrees(180)).wait_for_completed()
         startConver()
         robot.go_to_pose(my_waypoint).wait_for_completed()
 
     #Plays the pong function
-    else if randomEvent == 3:
+    elif randomEvent == 3:
         robot.run_program(kinvert_pong).wait_for_completed()
         robot.go_to_pose(my_waypoint).wait_for_completed()
-
-
-    else:
-        break
 
 #cozmo.run_program(doSomething)

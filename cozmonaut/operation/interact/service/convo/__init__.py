@@ -15,6 +15,7 @@ from typing import List
 import cozmo
 from pkg_resources import resource_filename
 
+from cozmonaut.operation.interact import database
 from cozmonaut.operation.interact.service import Service
 
 # The conversation data directory
@@ -101,6 +102,9 @@ class ConversationActionSayText(ConversationAction):
         self._pitch = pitch
         self._human = human
 
+        # Format the text
+        self._format_text()
+
     async def perform(self, robot_a: cozmo.robot.Robot, robot_b: cozmo.robot.Robot):
         """
         Perform the action by saying text.
@@ -133,6 +137,13 @@ class ConversationActionSayText(ConversationAction):
 
         # Wait for coroutines to complete
         await asyncio.gather(*coros)
+
+    def _format_text(self):
+        # Get the name of the last seen person
+        name_last_seen = database.returnStudentName() or 'Bob'
+
+        # Format the last name seen
+        self._text = self._text.format(self._text, name_last_seen=name_last_seen)
 
 
 class ConversationActionAnimTrigger(ConversationAction):
@@ -188,8 +199,23 @@ class Conversation:
     a conversation for testing purposes.
     """
 
-    # The conversation actions
-    actions = []
+    def __init__(self, name: str, actions: list):
+        self._name = name
+        self._actions = actions
+
+    @property
+    def name(self):
+        """
+        :return: The conversation name
+        """
+        return self._name
+
+    @name.setter
+    def name(self, value: str):
+        """
+        :param value: The conversation name
+        """
+        self._name = value
 
     async def perform(self, robot_a: cozmo.robot.Robot, robot_b: cozmo.robot.Robot):
         """
@@ -200,7 +226,7 @@ class Conversation:
         """
 
         # Perform each action in sequence
-        for action in self.actions:
+        for action in self._actions:
             await action.perform(
                 robot_a=robot_a,
                 robot_b=robot_b,
@@ -261,14 +287,18 @@ class ServiceConvo(Service):
             if not data.get('name') == name:
                 raise RuntimeError('conversation name mismatch')
 
-            # The loaded conversation
-            convo = Conversation()
+            # The loaded conversation action
+            actions = []
 
             # Load each action in the script
             for action in data.get('script', []):
-                convo.actions.append(self._load_action(action))
+                actions.append(self._load_action(action))
 
-            return convo
+            # Create the conversation
+            return Conversation(
+                name=name,
+                actions=actions,
+            )
 
     def _load_action(self, data):
         """
