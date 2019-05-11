@@ -7,7 +7,7 @@
       "what": "Now there's something you don't see every day, Chauncy",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -15,7 +15,7 @@
       "what": "What's that, Edgar",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -23,7 +23,7 @@
       "what": "A mountain floating above our heads",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -31,7 +31,7 @@
       "what": "What mountain floating above our heads?",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -39,7 +39,7 @@
       "what": "The one I'm detecting with my superior robotic sensors",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -47,7 +47,7 @@
       "what": "Oh, I don't know Edgar. The world is changing. Floating mountains are actually quite common these days",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -55,7 +55,7 @@
       "what": "I suppose you're right as always Chauncy",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -63,7 +63,7 @@
       "what": "That's right, Edgar",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     }
   ]
 }

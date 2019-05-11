@@ -430,30 +430,36 @@ class OperationInteract(Operation):
                 # On a successful transition, we'll update this
                 state_final = state_current
 
+                # The task to wait on
+                task = None
+
                 if state_current == _RobotState.home:
                     if state_next == _RobotState.waypoint:
                         # GOTO home -> waypoint
                         state_final = state_next
 
                         # Drive from the charger to the waypoint
-                        asyncio.ensure_future(self._do_drive_from_charger_to_waypoint(index, robot))
+                        task = asyncio.ensure_future(self._do_drive_from_charger_to_waypoint(index, robot))
                 elif state_current == _RobotState.waypoint:
                     if state_next == _RobotState.home:
                         # GOTO waypoint -> home
                         state_final = state_next
 
                         # Drive from the waypoint to the charger
-                        asyncio.ensure_future(self._do_drive_from_waypoint_to_charger(index, robot))
+                        task = asyncio.ensure_future(self._do_drive_from_waypoint_to_charger(index, robot))
                     elif state_next == _RobotState.convo:
                         # GOTO waypoint -> convo
                         state_final = state_next
 
                         # Carry out the conversation
-                        asyncio.ensure_future(self._do_convo(index, robot))
+                        task = asyncio.ensure_future(self._do_convo(index, robot))
                 elif state_current == _RobotState.convo:
                     if state_next == _RobotState.waypoint:
                         # GOTO convo -> waypoint
                         state_final = state_next
+
+                        # Return to the waypoint
+                        task = asyncio.ensure_future(self._do_return_to_waypoint(index, robot))
 
                 # If the state did not change
                 if state_final == state_current:
@@ -464,6 +470,10 @@ class OperationInteract(Operation):
                     self._robot_state_a = state_final
                 elif index == 2:
                     self._robot_state_b = state_final
+
+                # Wait for the task
+                # This prevents any issues with multiple simultaneous movements
+                await task
 
         print(f'Driver for robot {letter} has stopped')
 
@@ -851,6 +861,10 @@ class OperationInteract(Operation):
 
         print(f'Robot {letter} is engaging in conversation')
 
+        # Turn toward other Cozmo
+        # TODO: Use the index to determine angle to look at other Cozmo
+        await robot.turn_in_place(cozmo.util.degrees(180)).wait_for_completed()
+
         # Get the requested conversation
         name = None
         if index == 1:
@@ -858,13 +872,49 @@ class OperationInteract(Operation):
         elif index == 2:
             name = self._robot_queue_b.get()
 
-        print(f'We would do {name}')
+        # Load the conversation
+        convo = self._service_convo.load(name)
+
+        if convo is None:
+            # Uh oh! That conversation does not exist...
+            print(f'There is no conversation named "{name}"')
+        else:
+            # Perform the conversation
+            await convo.perform(
+                # One of these may be None, but that's okay
+                # The service will take care of handling that
+                robot_a=self._robot_a,
+                robot_b=self._robot_b,
+            )
 
         # Go back to waypoint state after conversation completes
         if index == 1:
             self._robot_queue_a.put(_RobotState.waypoint)
         elif index == 2:
             self._robot_queue_b.put(_RobotState.waypoint)
+
+    async def _do_return_to_waypoint(self, index: int, robot: cozmo.robot.Robot):
+        """
+        Action for returning to waypoint.
+
+        :param index: The robot index
+        :param robot: The robot instance
+        """
+
+        # Convert robot index to robot letter
+        letter = 'A' if index == 1 else 'B'
+
+        print(f'Robot {letter} is returning to waypoint')
+
+        # Get the robot waypoint
+        waypoint = None
+        if index == 1:
+            waypoint = self._robot_waypoint_a
+        elif index == 2:
+            waypoint = self._robot_waypoint_b
+
+        # Return to the saved waypoint (based on Eric's routine)
+        await robot.go_to_pose(waypoint).wait_for_completed()
 
     async def _choreographer(self):
         """

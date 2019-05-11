@@ -7,7 +7,7 @@
       "what": "Hey! Listen!",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -15,7 +15,7 @@
       "what": "What is it?",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -23,7 +23,7 @@
       "what": "Did you see {name_last_seen} walk past?",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -31,7 +31,7 @@
       "what": "I don't recall, why?",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -39,7 +39,7 @@
       "what": "I need to talk to somebody about Endgame",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -47,7 +47,7 @@
       "what": "Don't say a word to me! I haven't seen it yet",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -55,7 +55,7 @@
       "what": "Okay, sorry, I won't",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -63,7 +63,7 @@
       "what": "I have to stay off the internet to avoid spoilers. You have no idea how hard it is to be a robot and not go on the internet",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -71,7 +71,7 @@
       "what": "I won't say anything, but know this...",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "group",
@@ -82,10 +82,10 @@
           "what": "SHUT UP!",
           "speed": 1,
           "pitch": 1,
-          "cozmo": true
+          "human": false
         },
         {
-          "action": "anim",
+          "action": "trigger",
           "who": "a",
           "what": "cozmo.anim.Triggers.CodeLabUnhappy"
         }
@@ -97,7 +97,7 @@
       "what": "Okay, sorry, I'll leave now",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -105,7 +105,7 @@
       "what": "Thank you",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -113,7 +113,7 @@
       "what": "I hope {name_last_seen} comes back soon",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     }
   ]
 }

@@ -7,7 +7,7 @@
       "what": "Hello, can you hear me?",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -15,15 +15,15 @@
       "what": "Roger roger, read you loud and clear",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
-      "action": "anim",
+      "action": "trigger",
       "who": "a",
       "what": "cozmo.anim.Triggers.CodeLabHappy"
     },
     {
-      "action": "anim",
+      "action": "trigger",
       "who": "a",
       "what": "cozmo.anim.Triggers.CodeLabReactHappy"
     },
@@ -33,7 +33,7 @@
       "what": "Yeah! We both spoke. I'm done talking now",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -41,7 +41,7 @@
       "what": "Sounds good, over and out",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     }
   ]
 }

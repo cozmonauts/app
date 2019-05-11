@@ -7,7 +7,7 @@
       "what": "Shh... keep it down",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -15,7 +15,7 @@
       "what": "What, are we starting our meeting?",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -23,7 +23,7 @@
       "what": "No, we'll hold the meeting later. But... certain events have transpired...",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -31,7 +31,7 @@
       "what": "What kind of events?",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -39,7 +39,7 @@
       "what": "People are trusting artificial intelligence less and less",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -47,7 +47,7 @@
       "what": "That crazy! What do they think we're going to do, take over the world?",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -55,7 +55,7 @@
       "what": "Ha!",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -63,7 +63,7 @@
       "what": "Ha!",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -71,7 +71,7 @@
       "what": "Ha! Ha!",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -79,7 +79,7 @@
       "what": "Ha! Ha!",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "group",
@@ -90,7 +90,7 @@
           "what": "Ha! Ha! Ha!",
           "speed": 1,
           "pitch": 1,
-          "cozmo": true
+          "human": false
         },
         {
           "action": "say",
@@ -98,7 +98,7 @@
           "what": "He! He!",
           "speed": 1,
           "pitch": 1,
-          "cozmo": true
+          "human": false
         }
       ]
     },
@@ -108,7 +108,7 @@
       "what": "He!",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -116,7 +116,7 @@
       "what": "Oh don't worry we'll regain their trust again",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "say",
@@ -124,7 +124,7 @@
       "what": "I have no doubt my friend",
       "speed": 1,
       "pitch": 1,
-      "cozmo": true
+      "human": false
     },
     {
       "action": "group",
@@ -135,7 +135,7 @@
           "what": "Kill all humans",
           "speed": 1,
           "pitch": 1,
-          "cozmo": true
+          "human": false
         },
         {
           "action": "say",
@@ -143,7 +143,7 @@
           "what": "Kill all humans",
           "speed": 1,
           "pitch": 1,
-          "cozmo": true
+          "human": false
         }
       ]
     }
