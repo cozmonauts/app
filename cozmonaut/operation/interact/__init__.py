@@ -22,7 +22,6 @@ from cozmonaut.operation import Operation
 from cozmonaut.operation.interact import database
 from cozmonaut.operation.interact.service.convo import ServiceConvo
 from cozmonaut.operation.interact.service.face import DetectedFace, RecognizedFace, ServiceFace
-from cozmonaut.operation.interact.service.speech import ServiceSpeech
 
 
 class InteractMode(Enum):
@@ -127,13 +126,9 @@ class OperationInteract(Operation):
         # The conversation service
         self._service_convo = ServiceConvo()
 
-        # The face service for robot
+        # The face services for robots
         self._service_face_a = ServiceFace()
         self._service_face_b = ServiceFace()
-
-        # The speech service for robot
-        self._service_speech_a = ServiceSpeech()
-        self._service_speech_b = ServiceSpeech()
 
         # The robot instances
         self._robot_a: cozmo.robot.Robot = None
@@ -463,19 +458,15 @@ class OperationInteract(Operation):
         # Get the robot-specific data
         state_queue = None
         service_face = None
-        service_speech = None
         if index == 1:
             state_queue = self._robot_queue_a
             service_face = self._service_face_a
-            service_speech = self._service_speech_a
         elif index == 2:
             state_queue = self._robot_queue_b
             service_face = self._service_face_b
-            service_speech = self._service_speech_b
 
-        # Start the face and speech services
+        # Start the face service
         service_face.start()
-        service_speech.start()
 
         while not self._stopping:
             # Yield control
@@ -586,9 +577,8 @@ class OperationInteract(Operation):
                     # This prevents any issues with multiple simultaneous movements
                     await task
 
-        # Stop the face and speech services
+        # Stop the face service
         service_face.stop()
-        service_speech.stop()
 
         print(f'Driver for robot {letter} has stopped')
 
@@ -1273,15 +1263,9 @@ class OperationInteract(Operation):
 
         # Get the robot-specific services
         service_face = None
-        service_speech = None
-        service_face = None
         if index == 1:
             service_face = self._service_face_a
-            service_speech = self._service_speech_a
-            service_face = self._service_face_a
         elif index == 2:
-            service_face = self._service_face_b
-            service_speech = self._service_speech_b
             service_face = self._service_face_b
 
         # Tilt the head upward to look for faces
@@ -1390,9 +1374,8 @@ class OperationInteract(Operation):
                     await robot.say_text('Please type your name.').wait_for_completed()
 
                 # Get the name of the face
-                # This is implemented as either speech recognition or console input
-                # Whichever one is used depends on user preferences (but just control input)
-                print('PLEASE PRESS THE ENTER KEY')
+                # This is implemented as console input
+                print('PLEASE PRESS THE ENTER KEY')  # This is a bad bad user experience, I know, but ugh...
                 name = input('NAME: ')
 
                 # Encode the identity to a string for storage in the database
