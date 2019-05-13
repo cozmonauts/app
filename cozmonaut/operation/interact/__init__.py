@@ -356,7 +356,7 @@ class OperationInteract(Operation):
                 self._driver(2, self._robot_b),
 
                 # The choreographer coroutine automates the robots from a high level
-                #self._choreographer(),
+                self._choreographer(),
 
                 # Explicitly provide our event loop
                 # Without this, there will be an error along the lines of "no current event loop"
@@ -1016,6 +1016,8 @@ class OperationInteract(Operation):
         elif index == 2:
             name = self._robot_queue_b.get()
 
+        print(f'Requested conversation {name}')
+
         # Load the conversation
         convo = self._service_convo.load(name)
 
@@ -1508,6 +1510,7 @@ class OperationInteract(Operation):
                     queue_choice.put(_RobotState.greet)
                     idle = False
 
+                # Pick a random activity
                 rand_activity = random.randrange(1, 200)
 
                 if rand_activity == 1:
@@ -1519,10 +1522,24 @@ class OperationInteract(Operation):
                     elif choice == 2:  # Chosen B
                         self._cancel_b = True
 
-                    rand_convo = random.randrange(1, len(self._service_convo.list()))
-
                     # Clear complete flag
                     self._complete = False
+
+                    queue_choice.put(_RobotState.waypoint)
+                    queue_choice.put(_RobotState.convo)
+
+                    # Pick a random conversation
+                    convos = self._service_convo.list()
+                    convo_num = random.randrange(1, len(convos))
+                    convo_name = convos[convo_num]
+                    queue_choice.put(convo_name)
+
+                    # While conversation is running
+                    while not self._stopping and self._is_battery_good(choice) and not self._complete:
+                        # Yield control
+                        await asyncio.sleep(0)
+
+                    print('Choreographer detected conversation complete')
 
                     # Set idle flag
                     idle = True
@@ -1543,7 +1560,6 @@ class OperationInteract(Operation):
 
                     # While pong is running
                     while not self._stopping and self._is_battery_good(choice) and not self._complete:
-                        print("Pong Loop")
                         # Yield control
                         await asyncio.sleep(0)
 
@@ -1569,14 +1585,11 @@ class OperationInteract(Operation):
                     # While the freeplay mode is running
                     start = time.clock()
                     while not self._stopping and self._is_battery_good(choice):
-                        print("Freeplay loop")
-                        if time.clock() - start > 20:  # TODO
+                        if time.clock() - start > 20:  # Only stay in freeplay for twenty seconds
                             break
 
                         # Yield control
                         await asyncio.sleep(0)
-
-                    print('1')
 
                     # Cancel freeplay
                     if choice == 1:  # Chosen A
@@ -1587,16 +1600,11 @@ class OperationInteract(Operation):
                     # Set idle flag
                     idle = True
 
-                print('2')
-
                 # Clear the completion flag
                 self._complete = False
 
                 # Sleep for a fixed time
                 await asyncio.sleep(0.5)
-                print(4)
-
-        print('3')
 
         # Cancel greeting
         if choice == 1:  # Chosen A
@@ -1641,8 +1649,6 @@ class OperationInteract(Operation):
 
         print('Choreographer has stopped')
 
-    #iterator = 0
-
     def _is_battery_good(self, index: int):
         """
         Test if the battery on a robot is good.
@@ -1657,10 +1663,6 @@ class OperationInteract(Operation):
             potential = self._robot_a.battery_voltage
         elif index == 2:
             potential = self._robot_b.battery_voltage
-
-        self._iterator += 1
-        if self._iterator > 10:
-            potential = 2.5
 
         # If the battery is good...
         return potential > 3.5
