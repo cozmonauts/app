@@ -7,8 +7,6 @@
 Main command-line app by The Cozmonauts.
 
 Usage:
-    cozmonaut (ls | list-friends) [<friend>...]
-    cozmonaut (rm | remove-friends) <friend>...
     cozmonaut interact [-a <sera> | --robot-a=<sera>] [-b <serb> | --robot-b=<serb>]
     cozmonaut (-h | --help | --version)
 
@@ -23,22 +21,6 @@ from docopt import docopt
 
 from cozmonaut import __version__
 from cozmonaut.operation.interact import InteractInterface, OperationInteract
-
-
-def do_list_friends():
-    """
-    Carry out listing friends.
-    """
-
-    print('list')
-
-
-def do_remove_friends():
-    """
-    Carry out removing friends.
-    """
-
-    print('remove')
 
 
 def do_interact(sera: str, serb: str):
@@ -102,13 +84,7 @@ if __name__ == '__main__':
     # Parse command-line arguments
     args = docopt(__doc__, version=__version__)
 
-    if args['ls'] or args['list-friends']:
-        # Do friend(s) listing
-        do_list_friends()
-    elif args['rm'] or args['remove-friends']:
-        # Do friend(s) removal
-        do_remove_friends()
-    elif args['interact']:
+    if args['interact']:
         # Do interactive mode
         do_interact(
             sera=args.get('<sera>') or args.get('--robot-a'),
