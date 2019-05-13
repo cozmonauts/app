@@ -41,7 +41,7 @@
       "pitch": 0.5,
       "human": true
     },
-	{
+    {
       "action": "say",
       "who": "a",
       "what": "You have only begun to discover your power. Join me and I will complete your training.",
@@ -49,7 +49,7 @@
       "pitch": 0.5,
       "human": true
     },
-	{
+    {
       "action": "say",
       "who": "a",
       "what": "With our combined strength, we can end this destructive conflict and bring order to the galaxy.",
