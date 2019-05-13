@@ -98,7 +98,12 @@ class OperationInteract(Operation):
         super().__init__(args)
 
         # The terminal interface
-        self._term = None
+        self._term: cmd2.Cmd = None
+
+        # Tools for prompting for names
+        self._prompted_name = False
+        self._prompted_name_response: str = None
+        self._prompted_name_lock = Lock()
 
         # Unpack wanted serial numbers
         self._wanted_serial_a = args.get('sera', '0241c714')  # Default to an actual serial number
@@ -1071,11 +1076,14 @@ class OperationInteract(Operation):
                     elif index == 2:
                         self._cancel_b = False
 
-                    broken = True
                     break
 
                 # Yield control
                 await asyncio.sleep(0)
+
+            # Cancel the future
+            # This forces a hard stop on the conversation
+            fut.cancel()
 
     async def _do_freeplay(self, index: int, robot: cozmo.robot.Robot):
         """
@@ -1389,6 +1397,15 @@ class OperationInteract(Operation):
             if face_id == -1:
                 self._tprint('We do not know this face')
 
+                # Get the name of the face
+                # This is implemented as console input
+                name = 'Bob'
+                self._prompted_name = True
+                self._prompted_name_response = None
+                with self._term.terminal_lock:
+                    # Ask for a name
+                    self._term.async_update_prompt('(please type your name) ')
+
                 # Ask for a name
                 num = random.randrange(3)
                 if num == 0:
@@ -1398,16 +1415,22 @@ class OperationInteract(Operation):
                 elif num == 2:
                     await robot.say_text('I don\'t know you. Please type your name.').wait_for_completed()
 
-                # Get the name of the face
-                # This is implemented as console input
-                self._tprint('PLEASE PRESS THE ENTER KEY')  # This is a bad bad user experience, I know, but ugh...
-                name = input('NAME: ')
+                # Wait for the prompt to come back
+                while True:
+                    with self._prompted_name_lock:
+                        if not self._prompted_name:
+                            name = self._prompted_name_response
+                            break
+                    await asyncio.sleep(0)
 
                 # Encode the identity to a string for storage in the database
                 face_ident_enc = self._face_ident_encode(face_ident)
 
                 # Insert face into the database and get the assigned face ID (thanks Herman, this is easy to use)
                 face_id = database.insertNewStudent(name, face_ident_enc)
+
+                # The database update has completed
+                self._tprint('Database update completed')
 
                 # Add identity to both Cozmo A and B face services
                 # This lets us recognize this face again in the same session
@@ -1431,6 +1454,9 @@ class OperationInteract(Operation):
 
                 # Update time last seen for face
                 database.checkForStudent(face_id)
+
+                # Print time last seen
+                self._tprint(f'This face was last seen at {time_last_seen}')
 
                 # TODO: Maybe we can add some "welcome back"-style messages that use the time last seen!
 
@@ -1695,6 +1721,11 @@ class OperationInteract(Operation):
         :param text: The text to print
         """
 
+        # Just print if terminal interface unavailable
+        if self._term is None:
+            print(text)
+            return
+
         # Lock the terminal interface
         with self._term.terminal_lock:
             # Asynchronously print to the terminal
@@ -1898,6 +1929,24 @@ class InteractInterface(cmd2.Cmd):
 
         # Set the swap flag
         self._op._swap = True
+
+    def precmd(self, statement: cmd2.Statement) -> cmd2.Statement:
+        # noinspection PyProtectedMember
+        with self._op._prompted_name_lock:
+            # If a name is being prompted, save it and kill the command
+            # noinspection PyProtectedMember
+            if self._op._prompted_name:
+                # Send the name back
+                self._op._prompted_name = False
+                self._op._prompted_name_response = str(statement.raw)
+
+                # Restore the prompt
+                self.prompt = '(cozmo) '
+
+                # Pretend like command is empty
+                return ''
+
+        return statement
 
     def _get_robot_state_queue(self):
         """Get the state queue for the selected robot."""
