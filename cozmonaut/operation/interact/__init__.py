@@ -1490,28 +1490,6 @@ class OperationInteract(Operation):
 
         print('Choreographer has stopped')
 
-    def _manual_advance(self, index: int):
-        """
-        Manually advance the given robot.
-
-        This drives the robot from its charger to its waypoint.
-
-        Thread-safe and non-blocking.
-
-        :param index: The robot index
-        """
-
-        # Get the state queue for the robot
-        state_queue = None
-        if index == 1:
-            state_queue = self._robot_queue_a
-        elif index == 2:
-            state_queue = self._robot_queue_b
-
-        # Drive from the charger to the waypoint
-        if state_queue is not None:
-            state_queue.put(_RobotAction.drive_from_charger_to_waypoint)
-
 
 class InteractInterface(cmd2.Cmd):
     """
