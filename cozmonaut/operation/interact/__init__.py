@@ -1576,7 +1576,7 @@ class OperationInteract(Operation):
                     idle = False
 
                 # Pick a random activity
-                rand_activity = random.randrange(1, 200)
+                rand_activity = random.randrange(1, 162000)  # Something every 90 minutes on average
 
                 if rand_activity == 1:
                     self._tprint('Going to do conversation')
@@ -1680,7 +1680,7 @@ class OperationInteract(Operation):
                 self._complete = False
 
                 # Sleep for a fixed time
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.1)  # Choreographer loops once every tenth of a second
 
             # Cancel greeting
             if choice == 1:  # Chosen A
