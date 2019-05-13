@@ -10,6 +10,7 @@ import json
 import math
 import queue
 import random
+import time
 from enum import Enum
 from threading import Lock, Thread
 from typing import Tuple
@@ -125,6 +126,12 @@ class OperationInteract(Operation):
         self._cancel_a = False
         self._cancel_b = False
 
+        # An indicator telling if the activity is completed
+        self._complete = False
+
+        # An indicator telling if we should swap
+        self._swap = False
+
         # The conversation service
         self._service_convo = ServiceConvo()
 
@@ -151,6 +158,8 @@ class OperationInteract(Operation):
         # Waypoints for the robots
         self._robot_waypoint_a: cozmo.util.Pose = None
         self._robot_waypoint_b: cozmo.util.Pose = None
+
+        self._iterator = 0
 
     def start(self):
         """
@@ -353,7 +362,7 @@ class OperationInteract(Operation):
                 self._driver(2, self._robot_b),
 
                 # The choreographer coroutine automates the robots from a high level
-                self._choreographer(),
+                #self._choreographer(),
 
                 # Explicitly provide our event loop
                 # Without this, there will be an error along the lines of "no current event loop"
@@ -540,6 +549,7 @@ class OperationInteract(Operation):
                         task = asyncio.ensure_future(self._do_freeplay(index, robot))
                     elif state_next == _RobotState.pong:
                         # GOTO waypoint -> pong
+                        state_final = state_next
 
                         # Carry out pong
                         task = asyncio.ensure_future(self._do_pong(index, robot))
@@ -783,6 +793,9 @@ class OperationInteract(Operation):
             await robot.backup_onto_charger(max_drive_time=3)
         else:
             print('The charger was not detected! Assuming we\'re on it?')  # TODO: What do? Call for help...
+
+        # Set completed flag
+        self._complete = True
 
         #
         # END INTEGRATED CHARGER RETURN CODE
@@ -1054,12 +1067,6 @@ class OperationInteract(Operation):
                 # Yield control
                 await asyncio.sleep(0)
 
-        # Go back to waypoint state after conversation completes
-        if index == 1:
-            self._robot_queue_a.put(_RobotState.waypoint)
-        elif index == 2:
-            self._robot_queue_b.put(_RobotState.waypoint)
-
     async def _do_freeplay(self, index: int, robot: cozmo.robot.Robot):
         """
         Action for carrying out a conversation.
@@ -1108,12 +1115,6 @@ class OperationInteract(Operation):
 
         # Play happy animation
         await robot.play_anim_trigger(cozmo.anim.Triggers.DriveEndHappy).wait_for_completed()
-
-        # Go back to waypoint state after freeplay completes
-        if index == 1:
-            self._robot_queue_a.put(_RobotState.waypoint)
-        elif index == 2:
-            self._robot_queue_b.put(_RobotState.waypoint)
 
     async def _do_pong(self, index: int, robot: cozmo.robot.Robot):
         """
@@ -1219,6 +1220,9 @@ class OperationInteract(Operation):
 
             # Sleep for a bit
             await asyncio.sleep(0.02)
+
+        # Set completion flag
+        self._complete = True
 
     def _pong_compute_paddle_y(self, ball_x, ball_y, ball_vel_x, ball_vel_y):
         # Set paddle height to ball height with a random slop for effect
@@ -1384,11 +1388,11 @@ class OperationInteract(Operation):
                 # Ask for a name
                 num = random.randrange(3)
                 if num == 0:
-                    await robot.say_text('Who are you?').wait_for_completed()
+                    await robot.say_text('Who are you? Please type your name.').wait_for_completed()
                 elif num == 1:
-                    await robot.say_text('What is your name?').wait_for_completed()
+                    await robot.say_text('What is your name? Please type it.').wait_for_completed()
                 elif num == 2:
-                    await robot.say_text('Please type your name.').wait_for_completed()
+                    await robot.say_text('I don\'t know you. Please type your name.').wait_for_completed()
 
                 # Get the name of the face
                 # This is implemented as either speech recognition or console input
@@ -1435,12 +1439,6 @@ class OperationInteract(Operation):
                     await robot.say_text(f'Hello again, {name}!').wait_for_completed()
                 elif num == 2:
                     await robot.say_text(f'Good to see you, {name}!').wait_for_completed()
-
-        # Go back to waypoint state after conversation completes
-        if index == 1:
-            self._robot_queue_a.put(_RobotState.waypoint)
-        elif index == 2:
-            self._robot_queue_b.put(_RobotState.waypoint)
 
     @staticmethod
     def _face_ident_decode(ident_enc: str) -> Tuple[float, ...]:
@@ -1496,17 +1494,194 @@ class OperationInteract(Operation):
     async def _choreographer(self):
         """
         The choreographer gives high-level commands to one or two robots.
+
+        Following the algorithm designed by David.
         """
 
         print('Choreographer has started')
 
-        while not self._stopping:
-            # TODO
+        # The Cozmo choice
+        choice = 1
 
+        # The idle flag
+        idle = False
+
+        # The current chosen queue
+        queue_choice = None
+
+        while not self._stopping:
+            # Get the queue for the chosen robot
+            if choice == 1:  # Chosen A
+                queue_choice = self._robot_queue_a
+            elif choice == 2:  # Chosen B
+                queue_choice = self._robot_queue_b
+
+            queue_choice.put(_RobotState.waypoint)
+            queue_choice.put(_RobotState.greet)
+
+            while self._is_battery_good(choice):
+                if idle:
+                    self._swap = False
+                    queue_choice.put(_RobotState.waypoint)
+                    queue_choice.put(_RobotState.greet)
+                    idle = False
+
+                rand_activity = random.randrange(1, 200)
+
+                if rand_activity == 1:
+                    print('Going to do conversation')
+
+                    # Cancel greeting
+                    if choice == 1:  # Chosen A
+                        self._cancel_a = True
+                    elif choice == 2:  # Chosen B
+                        self._cancel_b = True
+
+                    rand_convo = random.randrange(1, len(self._service_convo.list()))
+
+                    # Clear complete flag
+                    self._complete = False
+
+                    # Set idle flag
+                    idle = True
+                elif rand_activity == 2:
+                    print('Going to do pong')
+
+                    # Cancel greeting
+                    if choice == 1:  # Chosen A
+                        self._cancel_a = True
+                    elif choice == 2:  # Chosen B
+                        self._cancel_b = True
+
+                    # Clear complete flag
+                    self._complete = False
+
+                    queue_choice.put(_RobotState.waypoint)
+                    queue_choice.put(_RobotState.pong)
+
+                    # While pong is running
+                    while not self._stopping and self._is_battery_good(choice) and not self._complete:
+                        print("Pong Loop")
+                        # Yield control
+                        await asyncio.sleep(0)
+
+                    print('Choreographer detected pong complete')
+
+                    # Set idle flag
+                    idle = True
+                elif rand_activity == 3:
+                    print('Going to do freeplay')
+
+                    # Cancel greeting
+                    if choice == 1:  # Chosen A
+                        self._cancel_a = True
+                    elif choice == 2:  # Chosen B
+                        self._cancel_b = True
+
+                    # Clear complete flag
+                    self._complete = False
+
+                    queue_choice.put(_RobotState.waypoint)
+                    queue_choice.put(_RobotState.freeplay)
+
+                    # While the freeplay mode is running
+                    start = time.clock()
+                    while not self._stopping and self._is_battery_good(choice):
+                        print("Freeplay loop")
+                        if time.clock() - start > 20:  # TODO
+                            break
+
+                        # Yield control
+                        await asyncio.sleep(0)
+
+                    print('1')
+
+                    # Cancel freeplay
+                    if choice == 1:  # Chosen A
+                        self._cancel_a = True
+                    elif choice == 2:  # Chosen B
+                        self._cancel_b = True
+
+                    # Set idle flag
+                    idle = True
+
+                print('2')
+
+                # Clear the completion flag
+                self._complete = False
+
+                # Sleep for a fixed time
+                await asyncio.sleep(0.5)
+                print(4)
+
+        print('3')
+
+        # Cancel greeting
+        if choice == 1:  # Chosen A
+            self._cancel_a = True
+        elif choice == 2:  # Chosen B
+            self._cancel_b = True
+
+        # Clear complete flag
+        self._complete = False
+
+        queue_choice.put(_RobotState.waypoint)
+        queue_choice.put(_RobotState.home)
+
+        # While driving to home
+        while not self._stopping and self._is_battery_good(choice) and not self._complete:
             # Yield control
             await asyncio.sleep(0)
 
+        print('Choreographer detected driven to home')
+
+        # Swap the Cozmos
+        if choice == 1:
+            choice = 2
+        elif choice == 2:
+            choice = 1
+
+        # Get the queue for the chosen robot
+        queue_choice = None
+        if choice == 1:  # Chosen A
+            queue_choice = self._robot_queue_a
+        elif choice == 2:  # Chosen B
+            queue_choice = self._robot_queue_b
+
+        if choice == 1:
+            if not self._robot_state_a == _RobotState.home:
+                queue_choice.put(_RobotState.waypoint)
+                queue_choice.put(_RobotState.home)
+        elif choice == 2:
+            if not self._robot_state_b == _RobotState.home:
+                queue_choice.put(_RobotState.waypoint)
+                queue_choice.put(_RobotState.home)
+
         print('Choreographer has stopped')
+
+    #iterator = 0
+
+    def _is_battery_good(self, index: int):
+        """
+        Test if the battery on a robot is good.
+
+        :param index: The robot index
+        :return: True if such is the case, otherwise False
+        """
+
+        # Get the battery potential
+        potential = 0
+        if index == 1:
+            potential = self._robot_a.battery_voltage
+        elif index == 2:
+            potential = self._robot_b.battery_voltage
+
+        self._iterator += 1
+        if self._iterator > 10:
+            potential = 2.5
+
+        # If the battery is good...
+        return potential > 3.5
 
     def _manual_advance(self, index: int):
         """
@@ -1719,6 +1894,14 @@ class InteractInterface(cmd2.Cmd):
 
         # Go to freeplay state
         self._get_robot_state_queue().put(_RobotState.pong)
+
+    def do_swap(self, args):
+        """Issue a manual swap."""
+
+        print('Attempting to swap the Cozmos')
+
+        # Set the swap flag
+        self._op._swap = True
 
     def _get_robot_state_queue(self):
         """Get the state queue for the selected robot."""
