@@ -64,12 +64,14 @@ def do_interact(sera: str, serb: str):
     op = OperationInteract(args)
     op.start()
 
-    # Give the operation a few seconds to set up
-    time.sleep(3)
-
-    # Run the terminal interface for the interact operation
+    # Create the terminal interface
     # This internally registers a SIGINT handler
     iface = InteractInterface(op)
+
+    # Make operation aware of the terminal interface
+    op.term = iface
+
+    # Run the terminal interface for the interact operation
     iface.cmdloop()
 
     # Print a message if the operation completed without assistance

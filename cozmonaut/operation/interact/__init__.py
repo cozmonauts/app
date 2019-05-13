@@ -97,6 +97,9 @@ class OperationInteract(Operation):
 
         super().__init__(args)
 
+        # The terminal interface
+        self._term = None
+
         # Unpack wanted serial numbers
         self._wanted_serial_a = args.get('sera', '0241c714')  # Default to an actual serial number
         self._wanted_serial_b = args.get('serb', '45a18821')  # Default to an actual serial number
@@ -153,8 +156,6 @@ class OperationInteract(Operation):
         self._robot_waypoint_a: cozmo.util.Pose = None
         self._robot_waypoint_b: cozmo.util.Pose = None
 
-        self._iterator = 0
-
     def start(self):
         """
         Start the interact operation.
@@ -193,6 +194,20 @@ class OperationInteract(Operation):
         with self._stopped_lock:
             return not self._stopped
 
+    @property
+    def term(self):
+        """
+        :return: The terminal interface
+        """
+        return self._term
+
+    @term.setter
+    def term(self, value):
+        """
+        :param value: The terminal interface
+        """
+        self._term = value
+
     def _thread_interact_main(self):
         """
         The main function of the interact thread.
@@ -204,17 +219,17 @@ class OperationInteract(Operation):
 
             # Print some stuff about the mode
             if self._mode == InteractMode.both:
-                print('Configured for both Cozmos A and B')
-                print(f'Want Cozmo A to have serial number {self._wanted_serial_a}')
-                print(f'Want Cozmo B to have serial number {self._wanted_serial_b}')
+                self._tprint('Configured for both Cozmos A and B')
+                self._tprint(f'Want Cozmo A to have serial number {self._wanted_serial_a}')
+                self._tprint(f'Want Cozmo B to have serial number {self._wanted_serial_b}')
             elif self._mode == InteractMode.just_a:
-                print('Configured for just Cozmo A')
-                print(f'Want Cozmo A to have serial number {self._wanted_serial_a}')
+                self._tprint('Configured for just Cozmo A')
+                self._tprint(f'Want Cozmo A to have serial number {self._wanted_serial_a}')
             elif self._mode == InteractMode.just_b:
-                print('Configured for just Cozmo B')
-                print(f'Want Cozmo B to have serial number {self._wanted_serial_b}')
+                self._tprint('Configured for just Cozmo B')
+                self._tprint(f'Want Cozmo B to have serial number {self._wanted_serial_b}')
 
-            print('Establishing as many connections as possible')
+            self._tprint('Establishing as many connections as possible')
 
             # A list of connections we've made
             # We will connect to all available Cozmos one-by-one
@@ -230,13 +245,13 @@ class OperationInteract(Operation):
                     conn = cozmo.connect_on_loop(loop)
                 except cozmo.exceptions.CozmoSDKException:
                     # We've reached the end of available connections
-                    print('No more Cozmos available (this is normal)')
+                    self._tprint('No more Cozmos available (this is normal)')
                     break
 
                 # The connection index is just the length of the connections list
                 i = len(connections)
 
-                print(f'Established connection #{i}')
+                self._tprint(f'Established connection #{i}')
 
                 # Keep the connection
                 connections.insert(i, conn)
@@ -252,7 +267,7 @@ class OperationInteract(Operation):
                 # Wait for the robot on this connection
                 robot = loop.run_until_complete(conn.wait_for_robot())
 
-                print(f'Robot on connection #{i} has serial number {robot.serial}')
+                self._tprint(f'Robot on connection #{i} has serial number {robot.serial}')
 
                 # If we're assigning both Cozmos
                 if self._mode == InteractMode.both:
@@ -264,7 +279,8 @@ class OperationInteract(Operation):
                         # Assign robot A
                         self._robot_a = robot
 
-                        print(f'On connection #{i}, robot A was assigned serial number {robot.serial} (need A and B)')
+                        self._tprint(
+                            f'On connection #{i}, robot A was assigned serial number {robot.serial} (need A and B)')
 
                     # If this serial matches that desired for robot B
                     if robot.serial == self._wanted_serial_b:
@@ -274,7 +290,8 @@ class OperationInteract(Operation):
                         # Assign robot B
                         self._robot_b = robot
 
-                        print(f'On connection #{i}, robot B was assigned serial number {robot.serial} (need A and B)')
+                        self._tprint(
+                            f'On connection #{i}, robot B was assigned serial number {robot.serial} (need A and B)')
 
                 # If we're assigning just Cozmo A
                 if self._mode == InteractMode.just_a:
@@ -286,7 +303,8 @@ class OperationInteract(Operation):
                         # Assign robot A
                         self._robot_a = robot
 
-                        print(f'On connection #{i}, robot A was assigned serial number {robot.serial} (need just A)')
+                        self._tprint(
+                            f'On connection #{i}, robot A was assigned serial number {robot.serial} (need just A)')
 
                 # If we're assigning just Cozmo B
                 if self._mode == InteractMode.just_b:
@@ -298,11 +316,12 @@ class OperationInteract(Operation):
                         # Assign robot B
                         self._robot_b = robot
 
-                        print(f'On connection #{i}, robot B was assigned serial number {robot.serial} (need just B)')
+                        self._tprint(
+                            f'On connection #{i}, robot B was assigned serial number {robot.serial} (need just B)')
 
                 # If we're not keeping this connection
                 if not keep:
-                    print(f'Connection #{i} is not needed, so disconnecting it')
+                    self._tprint(f'Connection #{i} is not needed, so disconnecting it')
 
                     # Abort the connection
                     conn.abort(0)
@@ -315,32 +334,32 @@ class OperationInteract(Operation):
                 # Look at A
                 if self._robot_a is None:
                     missing = True
-                    print('Configured for both, but Cozmo A is missing')
+                    self._tprint('Configured for both, but Cozmo A is missing')
 
                 # Look at B
                 if self._robot_b is None:
                     missing = True
-                    print('Configured for both, but Cozmo B is missing')
+                    self._tprint('Configured for both, but Cozmo B is missing')
 
                 # If one is missing
                 if missing:
-                    print('At least one Cozmo is missing, so refusing to continue')
+                    self._tprint('At least one Cozmo is missing, so refusing to continue')
                     return
             elif self._mode == InteractMode.just_a:
                 # Look at A
                 if self._robot_a is None:
-                    print('Cozmo A is missing, so refusing to continue')
+                    self._tprint('Cozmo A is missing, so refusing to continue')
                     return
             elif self._mode == InteractMode.just_b:
                 # Look at B
                 if self._robot_b is None:
-                    print('Cozmo B is missing, so refusing to continue')
+                    self._tprint('Cozmo B is missing, so refusing to continue')
 
-            print('Beginning interactive procedure')
+            self._tprint('Beginning interactive procedure')
 
-            print('+-----------------------------------------------------------------+')
-            print('| IMPORTANT: We are assuming both Cozmos start on their chargers! |')
-            print('+-----------------------------------------------------------------+')
+            self._tprint('+-----------------------------------------------------------------+')
+            self._tprint('| IMPORTANT: We are assuming both Cozmos start on their chargers! |')
+            self._tprint('+-----------------------------------------------------------------+')
 
             # Assume both Cozmos start on their chargers (as advertised ^^^)
             self._robot_state_a = _RobotState.home
@@ -363,13 +382,13 @@ class OperationInteract(Operation):
                 loop=loop,
             )
 
-            print('Setting up face services')
+            self._tprint('Setting up face services')
 
             # Create face services
             self._service_face_a = ServiceFace()
             self._service_face_b = ServiceFace()
 
-            print('Loading known faces from database')
+            self._tprint('Loading known faces from database')
 
             # Query known faces from database
             known_faces = database.loadStudents()
@@ -399,7 +418,7 @@ class OperationInteract(Operation):
             self._service_face_a.stop()
             self._service_face_b.stop()
 
-            print('Goodbye!')
+            self._tprint('Goodbye!')
         finally:
             # Set the stopped flag
             with self._stopped_lock:
@@ -410,7 +429,7 @@ class OperationInteract(Operation):
         The watchdog handles shutdown requests.
         """
 
-        print('Watchdog has started')
+        self._tprint('Watchdog has started')
 
         while not self._stopping:
             # Check if we should stop
@@ -430,12 +449,12 @@ class OperationInteract(Operation):
                 # Politely ask the loop to stop soon
                 loop.call_soon(loop.stop)
 
-                print('The event loop will stop soon')
+                self._tprint('The event loop will stop soon')
             else:
                 # Yield control
                 await asyncio.sleep(0)
 
-        print('Watchdog has stopped')
+        self._tprint('Watchdog has stopped')
 
     async def _driver(self, index: int, robot: cozmo.robot.Robot):
         """
@@ -448,11 +467,11 @@ class OperationInteract(Operation):
         # Convert robot index to robot letter
         letter = 'A' if index == 1 else 'B'
 
-        print(f'Driver for robot {letter} has started')
+        self._tprint(f'Driver for robot {letter} has started')
 
         # Stop if this driver is not needed
         if robot is None:
-            print(f'Robot {letter} is not available, so driver {letter} is stopping')
+            self._tprint(f'Robot {letter} is not available, so driver {letter} is stopping')
             return
 
         # Enable color imaging on the robot
@@ -574,7 +593,7 @@ class OperationInteract(Operation):
 
                 # If the state did not change
                 if state_final == state_current:
-                    print(f'Failed to transition from state "{state_current.name}" to state "{state_next.name}"')
+                    self._tprint(f'Failed to transition from state "{state_current.name}" to state "{state_next.name}"')
 
                 # Update the current state
                 if index == 1:
@@ -590,7 +609,7 @@ class OperationInteract(Operation):
         # Stop the face service
         service_face.stop()
 
-        print(f'Driver for robot {letter} has stopped')
+        self._tprint(f'Driver for robot {letter} has stopped')
 
     def _driver_on_evt_new_raw_camera_image(self, index: int, robot: cozmo.robot.Robot,
                                             evt: cozmo.robot.camera.EvtNewRawCameraImage, **kwargs):
@@ -629,7 +648,7 @@ class OperationInteract(Operation):
         # Convert robot index to robot letter
         letter = 'A' if index == 1 else 'B'
 
-        print(f'Robot {letter} is departing from charger and heading to waypoint')
+        self._tprint(f'Robot {letter} is departing from charger and heading to waypoint')
 
         # Drive off the charger contacts
         await robot.drive_off_charger_contacts().wait_for_completed()
@@ -657,7 +676,7 @@ class OperationInteract(Operation):
         # Convert robot index to robot letter
         letter = 'A' if index == 1 else 'B'
 
-        print(f'Robot {letter} is departing from waypoint and heading to charger')
+        self._tprint(f'Robot {letter} is departing from waypoint and heading to charger')
 
         # Turn toward the charger
         await robot.turn_in_place(cozmo.util.degrees(180)).wait_for_completed()
@@ -698,8 +717,8 @@ class OperationInteract(Operation):
         await robot.set_lift_height(height=0.5, max_speed=10, in_parallel=True).wait_for_completed()
         await robot.set_head_angle(cozmo.util.degrees(0), in_parallel=True).wait_for_completed()
 
-        print('Begin strike phase')
-        print('The robot will try to strike the base of the charger')
+        self._tprint('Begin strike phase')
+        self._tprint('The robot will try to strike the base of the charger')
 
         # Start driving backward pretty quickly
         robot.drive_wheel_motors(-60, -60)
@@ -717,10 +736,10 @@ class OperationInteract(Operation):
             elapsed += delta
 
             if elapsed >= timeout:
-                print('Timed out while waiting for robot to strike the charger')
+                self._tprint('Timed out while waiting for robot to strike the charger')
                 break
             elif math.fabs(robot.pose_pitch.degrees) >= pitch_threshold:
-                print('The robot seems to have struck the charger (this is normal)')
+                self._tprint('The robot seems to have struck the charger (this is normal)')
                 break
 
         # Striking done, stop motors
@@ -729,8 +748,8 @@ class OperationInteract(Operation):
         # Wait a little
         await asyncio.sleep(0.5)
 
-        print('Begin flattening phase')
-        print('The robot will try to flatten out on the charger')
+        self._tprint('Begin flattening phase')
+        self._tprint('The robot will try to flatten out on the charger')
 
         # Start driving backward a little slower
         # We want to avoid driving up onto the back wall of the charger
@@ -749,13 +768,13 @@ class OperationInteract(Operation):
             elapsed += delta
 
             if elapsed >= timeout:
-                print('Timed out while waiting for robot to flatten out on the charger')
+                self._tprint('Timed out while waiting for robot to flatten out on the charger')
                 break
             elif math.fabs(robot.pose_pitch.degrees) > 20:
-                print('Robot pitch has reached an unexpected value (drove on wall?)')
+                self._tprint('Robot pitch has reached an unexpected value (drove on wall?)')
                 break
             elif math.fabs(robot.pose_pitch.degrees) < pitch_threshold:
-                print('The robot seems to have flattened out on the charger (this is normal)')
+                self._tprint('The robot seems to have flattened out on the charger (this is normal)')
                 break
 
         # Flattening done, stop motors
@@ -773,7 +792,7 @@ class OperationInteract(Operation):
 
         # If we made it onto the charger contacts
         if robot.is_on_charger:
-            print('The robot is on the charger... Let\'s celebrate!')
+            self._tprint('The robot is on the charger... Let\'s celebrate!')
 
             # Play a celebration animation
             await robot.drive_off_charger_contacts().wait_for_completed()
@@ -781,7 +800,7 @@ class OperationInteract(Operation):
                                           ignore_lift_track=True, in_parallel=True).wait_for_completed()
             await robot.backup_onto_charger(max_drive_time=3)
         else:
-            print('The charger was not detected! Assuming we\'re on it?')  # TODO: What do? Call for help...
+            self._tprint('The charger was not detected! Assuming we\'re on it?')  # TODO: What do? Call for help...
 
         # Set completed flag
         self._complete = True
@@ -800,13 +819,13 @@ class OperationInteract(Operation):
         :param robot: The robot instance
         """
 
-        print('Starting to look for the charger')
+        self._tprint('Starting to look for the charger')
 
         rnd = 1
 
         # Be persistent, Cozmo!
         while True:
-            print(f'Look for charger (round {rnd})')
+            self._tprint(f'Look for charger (round {rnd})')
 
             rnd += 1
 
@@ -835,10 +854,10 @@ class OperationInteract(Operation):
 
             # If we saw a charger, use that one
             if seen_charger is not None:
-                print('The charger was found!')
+                self._tprint('The charger was found!')
                 return seen_charger
             else:
-                print('The charger was not found! :(')
+                self._tprint('The charger was not found! :(')
 
                 # Play frustrated animation
                 await robot.play_anim_trigger(cozmo.anim.Triggers.FrustratedByFailureMajor).wait_for_completed()
@@ -864,7 +883,7 @@ class OperationInteract(Operation):
             # If the charger pose is in the same coordinate frame as the robot
             # This might not be the case if the robot gets picked up by a person or falls ("delocalizing")
             if robot.world.charger.pose.is_comparable(robot.pose):
-                print('The charger pose is already known')
+                self._tprint('The charger pose is already known')
 
                 # Just take the charger reference
                 charger = robot.world.charger
@@ -942,7 +961,7 @@ class OperationInteract(Operation):
         try:
             charger = await robot.world.wait_for_observed_charger(timeout=2, include_existing=True)
         except cozmo.exceptions.CozmoSDKException:
-            print('Charger not seen, so can\'t verify positioning')
+            self._tprint('Charger not seen, so can\'t verify positioning')
 
         # Positions of robot and charger
         robot_pos = robot.pose.position.x_y_z
@@ -971,9 +990,9 @@ class OperationInteract(Operation):
         angle_tol = 5 * math.pi / 180
 
         if distance < distance_tol and math.fabs(robot_rot_xy - charger_rot_xy) < angle_tol:
-            print('Successfully aligned')
+            self._tprint('Successfully aligned')
         else:
-            print('Did not align successfully')  # TODO: Should we retry here?
+            self._tprint('Did not align successfully')  # TODO: Should we retry here?
 
     @staticmethod
     def _charger_return_wrap_radians(angle: float):
@@ -1003,7 +1022,7 @@ class OperationInteract(Operation):
         # Convert robot index to robot letter
         letter = 'A' if index == 1 else 'B'
 
-        print(f'Robot {letter} is engaging in conversation')
+        self._tprint(f'Robot {letter} is engaging in conversation')
 
         # Turn toward other Cozmo
         # TODO: Use the index to determine angle to look at other Cozmo
@@ -1016,14 +1035,14 @@ class OperationInteract(Operation):
         elif index == 2:
             name = self._robot_queue_b.get()
 
-        print(f'Requested conversation {name}')
+        self._tprint(f'Requested conversation {name}')
 
         # Load the conversation
         convo = self._service_convo.load(name)
 
         if convo is None:
             # Uh oh! That conversation does not exist...
-            print(f'There is no conversation named "{name}"')
+            self._tprint(f'There is no conversation named "{name}"')
         else:
             # Perform the conversation
             fut = asyncio.ensure_future(convo.perform(
@@ -1044,7 +1063,7 @@ class OperationInteract(Operation):
 
                 # Handle cancelling
                 if cancel:
-                    print('Conversation cancelling')
+                    self._tprint('Conversation cancelling')
 
                     # Reset the cancel state
                     if index == 1:
@@ -1069,7 +1088,7 @@ class OperationInteract(Operation):
         # Convert robot index to robot letter
         letter = 'A' if index == 1 else 'B'
 
-        print(f'Robot {letter} is engaging in freeplay')
+        self._tprint(f'Robot {letter} is engaging in freeplay')
 
         # Start freeplay mode
         robot.start_freeplay_behaviors()
@@ -1085,7 +1104,7 @@ class OperationInteract(Operation):
 
             # Handle cancelling
             if cancel:
-                print('Freeplay cancelling')
+                self._tprint('Freeplay cancelling')
 
                 # Reset the cancel state
                 if index == 1:
@@ -1118,7 +1137,7 @@ class OperationInteract(Operation):
         # Convert robot index to robot letter
         letter = 'A' if index == 1 else 'b'
 
-        print(f'Robot {letter} is engaging in pong')
+        self._tprint(f'Robot {letter} is engaging in pong')
 
         # Look upward
         await robot.set_head_angle(cozmo.util.degrees(45)).wait_for_completed()
@@ -1151,7 +1170,7 @@ class OperationInteract(Operation):
 
             # Handle cancelling
             if cancel:
-                print('Pong cancelling')
+                self._tprint('Pong cancelling')
 
                 # Reset the cancel state
                 if index == 1:
@@ -1265,7 +1284,7 @@ class OperationInteract(Operation):
         # Convert robot index to robot letter
         letter = 'A' if index == 1 else 'B'
 
-        print(f'Robot {letter} is engaging in greeting')
+        self._tprint(f'Robot {letter} is engaging in greeting')
 
         # Get the robot-specific services
         service_face = None
@@ -1279,7 +1298,7 @@ class OperationInteract(Operation):
 
         broken = False
         while not self._stopping and not broken:
-            print('Waiting to detect a face')
+            self._tprint('Waiting to detect a face')
 
             # Get the cancel state
             cancel = None
@@ -1290,7 +1309,7 @@ class OperationInteract(Operation):
 
             # Handle cancelling
             if cancel:
-                print('Meet and greet cancelling')
+                self._tprint('Meet and greet cancelling')
 
                 # Reset the cancel state
                 if index == 1:
@@ -1316,7 +1335,7 @@ class OperationInteract(Operation):
 
                 # Handle cancelling
                 if cancel:
-                    print('Meet and greet cancelling')
+                    self._tprint('Meet and greet cancelling')
 
                     # Reset the cancel state
                     if index == 1:
@@ -1345,7 +1364,7 @@ class OperationInteract(Operation):
             # This is a 4-tuple of the form (left, top, right, and bottom) with int components
             face_coords = face_det.coords
 
-            print(f'Detected face {face_index} at {face_coords}')
+            self._tprint(f'Detected face {face_index} at {face_coords}')
 
             # TODO: Center on the face
 
@@ -1365,10 +1384,10 @@ class OperationInteract(Operation):
             # This is a 128-tuple of doubles for the face vector (AKA encoding, embedding, descriptor, etc.)
             face_ident = face_rec.ident
 
-            print(f'Recognized face {face_index} at {face_coords} as ID {face_id}')
+            self._tprint(f'Recognized face {face_index} at {face_coords} as ID {face_id}')
 
             if face_id == -1:
-                print('We do not know this face')
+                self._tprint('We do not know this face')
 
                 # Ask for a name
                 num = random.randrange(3)
@@ -1381,9 +1400,7 @@ class OperationInteract(Operation):
 
                 # Get the name of the face
                 # This is implemented as console input
-                self._prompting = True
-                self._
-                print('PLEASE PRESS THE ENTER KEY')  # This is a bad bad user experience, I know, but ugh...
+                self._tprint('PLEASE PRESS THE ENTER KEY')  # This is a bad bad user experience, I know, but ugh...
                 name = input('NAME: ')
 
                 # Encode the identity to a string for storage in the database
@@ -1407,7 +1424,7 @@ class OperationInteract(Operation):
                 elif num == 2:
                     await robot.say_text(f'Nice to meet you, {name}!').wait_for_completed()
             else:
-                print('We know this face')
+                self._tprint('We know this face')
 
                 # Get name and time last seen for this face
                 name, time_last_seen = database.determineStudent(face_id)
@@ -1465,7 +1482,7 @@ class OperationInteract(Operation):
         # Convert robot index to robot letter
         letter = 'A' if index == 1 else 'B'
 
-        print(f'Robot {letter} is returning to waypoint')
+        self._tprint(f'Robot {letter} is returning to waypoint')
 
         # Get the robot waypoint
         waypoint = None
@@ -1484,7 +1501,7 @@ class OperationInteract(Operation):
         Following the algorithm designed by David.
         """
 
-        print('Choreographer has started')
+        self._tprint('Choreographer has started')
 
         # The Cozmo choice
         choice = 1
@@ -1516,7 +1533,7 @@ class OperationInteract(Operation):
                 rand_activity = random.randrange(1, 200)
 
                 if rand_activity == 1:
-                    print('Going to do conversation')
+                    self._tprint('Going to do conversation')
 
                     # Cancel greeting
                     if choice == 1:  # Chosen A
@@ -1541,12 +1558,12 @@ class OperationInteract(Operation):
                         # Yield control
                         await asyncio.sleep(0)
 
-                    print('Choreographer detected conversation complete')
+                    self._tprint('Choreographer detected conversation complete')
 
                     # Set idle flag
                     idle = True
                 elif rand_activity == 2:
-                    print('Going to do pong')
+                    self._tprint('Going to do pong')
 
                     # Cancel greeting
                     if choice == 1:  # Chosen A
@@ -1565,12 +1582,12 @@ class OperationInteract(Operation):
                         # Yield control
                         await asyncio.sleep(0)
 
-                    print('Choreographer detected pong complete')
+                    self._tprint('Choreographer detected pong complete')
 
                     # Set idle flag
                     idle = True
                 elif rand_activity == 3:
-                    print('Going to do freeplay')
+                    self._tprint('Going to do freeplay')
 
                     # Cancel greeting
                     if choice == 1:  # Chosen A
@@ -1625,7 +1642,7 @@ class OperationInteract(Operation):
             # Yield control
             await asyncio.sleep(0)
 
-        print('Choreographer detected driven to home')
+        self._tprint('Choreographer detected driven to home')
 
         # Swap the Cozmos
         if choice == 1:
@@ -1649,7 +1666,7 @@ class OperationInteract(Operation):
                 queue_choice.put(_RobotState.waypoint)
                 queue_choice.put(_RobotState.home)
 
-        print('Choreographer has stopped')
+        self._tprint('Choreographer has stopped')
 
     def _is_battery_good(self, index: int):
         """
@@ -1668,6 +1685,21 @@ class OperationInteract(Operation):
 
         # If the battery is good...
         return potential > 3.5
+
+    def _tprint(self, text: str):
+        """
+        Terminal print.
+
+        This is kinda like print(), but it doesn't trample our terminal prompt.
+
+        :param text: The text to print
+        """
+
+        # Lock the terminal interface
+        with self._term.terminal_lock:
+            # Asynchronously print to the terminal
+            # They call this an "alert" in cmd2
+            self._term.async_alert(text)
 
 
 class InteractInterface(cmd2.Cmd):
