@@ -356,7 +356,7 @@ class OperationInteract(Operation):
                 self._driver(2, self._robot_b),
 
                 # The choreographer coroutine automates the robots from a high level
-                self._choreographer(),
+                # self._choreographer(),  TODO
 
                 # Explicitly provide our event loop
                 # Without this, there will be an error along the lines of "no current event loop"
@@ -1381,6 +1381,8 @@ class OperationInteract(Operation):
 
                 # Get the name of the face
                 # This is implemented as console input
+                self._prompting = True
+                self._
                 print('PLEASE PRESS THE ENTER KEY')  # This is a bad bad user experience, I know, but ugh...
                 name = input('NAME: ')
 
@@ -1772,20 +1774,20 @@ class InteractInterface(cmd2.Cmd):
             # noinspection PyProtectedMember
             self._op._cancel_b = True
 
-    def do_advance(self, args):
-        """Drive the selected Cozmo from its charger to its waypoint."""
+    def do_waypoint(self, args):
+        """Drive the selected Cozmo to its waypoint."""
 
         # Require a robot to be selected
         if self._selected_robot is None:
             print('No robot selected')
             return
 
-        print('Attempting to advance selected robot from charger')
+        print('Attempting to drive to waypoint')
 
         # Go to waypoint state
         self._get_robot_state_queue().put(_RobotState.waypoint)
 
-    def do_return(self, args):
+    def do_home(self, args):
         """Drive the selected Cozmo from its waypoint to its charger."""
 
         # Require a robot to be selected
@@ -1793,7 +1795,7 @@ class InteractInterface(cmd2.Cmd):
             print('No robot selected')
             return
 
-        print('Attempting to return selected robot to charger')
+        print('Attempting to return to charger')
 
         # Go to home state
         self._get_robot_state_queue().put(_RobotState.home)
