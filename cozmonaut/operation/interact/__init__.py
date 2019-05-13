@@ -126,6 +126,10 @@ class OperationInteract(Operation):
         self._stopped_lock = Lock()
 
         # An indicator telling if the operation is in the middle of stopping (not thread-safe)
+        # At this stage, the high level functionality starts to shut down
+        self._almost_stopping = False
+
+        # An indicator telling if the low-level functionality should shut down (not thread-safe)
         self._stopping = False
 
         # Indicators telling if the current activity should cancel for each Cozmo robot
@@ -136,7 +140,16 @@ class OperationInteract(Operation):
         self._complete = False
 
         # An indicator telling if we should swap
+        # This is only ever when poking around manually (but never in manual override mode)
+        # If the choreographer is running, you can coerce it to swap the Cozmos with this
+        # If you're in manual override mode, then this flag is too high level for you (call waypoint and home, instead)
         self._swap = False
+        self._swap_lock = Lock()
+
+        # Manual override mode
+        # In manual override, neither Cozmo is doing its own thing
+        self._override = False
+        self._override_lock = Lock()
 
         # The conversation service
         self._service_convo = ServiceConvo()
@@ -370,7 +383,7 @@ class OperationInteract(Operation):
             self._robot_state_a = _RobotState.home
             self._robot_state_b = _RobotState.home
 
-            asyncio.gather(
+            tasks = asyncio.gather(
                 # The watchdog coroutine handles the shutdown protocol
                 self._watchdog(),
 
@@ -380,7 +393,7 @@ class OperationInteract(Operation):
                 self._driver(2, self._robot_b),
 
                 # The choreographer coroutine automates the robots from a high level
-                # self._choreographer(),  TODO
+                self._choreographer(),
 
                 # Explicitly provide our event loop
                 # Without this, there will be an error along the lines of "no current event loop"
@@ -419,6 +432,9 @@ class OperationInteract(Operation):
             # Run the event loop until it stops (it's not actually forever)
             loop.run_forever()
 
+            # Keep running the event loop while things are pending
+            loop.run_until_complete(tasks)
+
             # Stop the face services
             self._service_face_a.stop()
             self._service_face_b.stop()
@@ -436,7 +452,7 @@ class OperationInteract(Operation):
 
         self._tprint('Watchdog has started')
 
-        while not self._stopping:
+        while not self._almost_stopping:
             # Check if we should stop
             # There shouldn't be much contention on this lock
             with self._should_stop_lock:
@@ -445,8 +461,8 @@ class OperationInteract(Operation):
             # If we should stop, start stopping
             if should_stop:
                 # Set the stopping indicator
-                # All well-behaved loops (those that check this indicator) should start shutting down
-                self._stopping = True
+                # All high-level loops should start shutting down
+                self._almost_stopping = True
 
                 # Get the event loop
                 loop = asyncio.get_event_loop()
@@ -501,7 +517,7 @@ class OperationInteract(Operation):
         # Start the face service
         service_face.start()
 
-        while not self._stopping:
+        while not self._stopping:  # Low-level loop (this needs to outlive the choreographer)
             # Yield control
             await asyncio.sleep(0)
 
@@ -1305,7 +1321,7 @@ class OperationInteract(Operation):
         await robot.set_head_angle(cozmo.robot.MAX_HEAD_ANGLE).wait_for_completed()
 
         broken = False
-        while not self._stopping and not broken:
+        while not self._almost_stopping and not broken:
             self._tprint('Waiting to detect a face')
 
             # Get the cancel state
@@ -1538,7 +1554,7 @@ class OperationInteract(Operation):
         # The current chosen queue
         queue_choice = None
 
-        while not self._stopping:
+        while not self._almost_stopping:
             # Get the queue for the chosen robot
             if choice == 1:  # Chosen A
                 queue_choice = self._robot_queue_a
@@ -1549,6 +1565,10 @@ class OperationInteract(Operation):
             queue_choice.put(_RobotState.greet)
 
             while self._is_battery_good(choice):
+                # This is an override point
+                if await self._wait_while_overridden():
+                    continue
+
                 if idle:
                     self._swap = False
                     queue_choice.put(_RobotState.waypoint)
@@ -1580,14 +1600,18 @@ class OperationInteract(Operation):
                     queue_choice.put(convo_name)
 
                     # While conversation is running
-                    while not self._stopping and self._is_battery_good(choice) and not self._complete:
+                    while not self._almost_stopping and self._is_battery_good(choice) and not self._complete:
                         # Yield control
                         await asyncio.sleep(0)
 
-                    self._tprint('Choreographer detected conversation complete')
-
                     # Set idle flag
                     idle = True
+
+                    # This is an override point
+                    if await self._wait_while_overridden():
+                        continue
+
+                    self._tprint('Choreographer detected conversation complete')
                 elif rand_activity == 2:
                     self._tprint('Going to do pong')
 
@@ -1604,14 +1628,18 @@ class OperationInteract(Operation):
                     queue_choice.put(_RobotState.pong)
 
                     # While pong is running
-                    while not self._stopping and self._is_battery_good(choice) and not self._complete:
+                    while not self._almost_stopping and self._is_battery_good(choice) and not self._complete:
                         # Yield control
                         await asyncio.sleep(0)
 
-                    self._tprint('Choreographer detected pong complete')
-
                     # Set idle flag
                     idle = True
+
+                    # This is an override point
+                    if await self._wait_while_overridden():
+                        continue
+
+                    self._tprint('Choreographer detected pong complete')
                 elif rand_activity == 3:
                     self._tprint('Going to do freeplay')
 
@@ -1629,7 +1657,7 @@ class OperationInteract(Operation):
 
                     # While the freeplay mode is running
                     start = time.clock()
-                    while not self._stopping and self._is_battery_good(choice):
+                    while not self._almost_stopping and self._is_battery_good(choice):
                         if time.clock() - start > 20:  # Only stay in freeplay for twenty seconds
                             break
 
@@ -1645,36 +1673,39 @@ class OperationInteract(Operation):
                     # Set idle flag
                     idle = True
 
+                    # This is an override point
+                    await self._wait_while_overridden()
+
                 # Clear the completion flag
                 self._complete = False
 
                 # Sleep for a fixed time
                 await asyncio.sleep(0.5)
 
-        # Cancel greeting
-        if choice == 1:  # Chosen A
-            self._cancel_a = True
-        elif choice == 2:  # Chosen B
-            self._cancel_b = True
+            # Cancel greeting
+            if choice == 1:  # Chosen A
+                self._cancel_a = True
+            elif choice == 2:  # Chosen B
+                self._cancel_b = True
 
-        # Clear complete flag
-        self._complete = False
+            # Clear complete flag
+            self._complete = False
 
-        queue_choice.put(_RobotState.waypoint)
-        queue_choice.put(_RobotState.home)
+            queue_choice.put(_RobotState.waypoint)
+            queue_choice.put(_RobotState.home)
 
-        # While driving to home
-        while not self._stopping and self._is_battery_good(choice) and not self._complete:
-            # Yield control
-            await asyncio.sleep(0)
+            # While driving to home
+            while not self._almost_stopping and self._is_battery_good(choice) and not self._complete:
+                # Yield control
+                await asyncio.sleep(0)
 
-        self._tprint('Choreographer detected driven to home')
+            self._tprint('Choreographer detected driven to home')
 
-        # Swap the Cozmos
-        if choice == 1:
-            choice = 2
-        elif choice == 2:
-            choice = 1
+            # Swap the Cozmos
+            if choice == 1:
+                choice = 2
+            elif choice == 2:
+                choice = 1
 
         # Get the queue for the chosen robot
         queue_choice = None
@@ -1683,16 +1714,13 @@ class OperationInteract(Operation):
         elif choice == 2:  # Chosen B
             queue_choice = self._robot_queue_b
 
-        if choice == 1:
-            if not self._robot_state_a == _RobotState.home:
-                queue_choice.put(_RobotState.waypoint)
-                queue_choice.put(_RobotState.home)
-        elif choice == 2:
-            if not self._robot_state_b == _RobotState.home:
-                queue_choice.put(_RobotState.waypoint)
-                queue_choice.put(_RobotState.home)
+        queue_choice.put(_RobotState.waypoint)
+        queue_choice.put(_RobotState.home)
 
         self._tprint('Choreographer has stopped')
+
+        # Now we can tear down the low-level loops
+        self._stopping = True
 
     def _is_battery_good(self, index: int):
         """
@@ -1711,6 +1739,37 @@ class OperationInteract(Operation):
 
         # If the battery is good...
         return potential > 3.5
+
+    async def _wait_while_overridden(self):
+        """
+        Declare an override point. This does not return until the override flag
+        is false. It plays nicely with asyncio, though.
+
+        :return: True if was overridden, otherwise False
+        """
+
+        was_overridden = False
+
+        # Get the override flag
+        with self._override_lock:
+            override = self._override
+
+        # If override is enabled
+        if override:
+            self._tprint('Manual override detected')
+
+            was_overridden = True
+
+            # Enter a loop until it is disabled
+            while True:
+                with self._override_lock:
+                    if not self._override:
+                        break
+
+                # Yield control
+                await asyncio.sleep(0)
+
+        return was_overridden
 
     def _tprint(self, text: str):
         """
@@ -1928,7 +1987,17 @@ class InteractInterface(cmd2.Cmd):
         print('Attempting to swap the Cozmos')
 
         # Set the swap flag
-        self._op._swap = True
+        with self._op._swap_lock:
+            self._op._swap = True
+
+    def do_override(self, args):
+        """Toggle manual override."""
+
+        print('Toggling manual override')
+
+        # Toggle the override flag
+        with self._op._override_lock:
+            self._op._override = not self._op._override
 
     def precmd(self, statement: cmd2.Statement) -> cmd2.Statement:
         # noinspection PyProtectedMember
