@@ -1,0 +1,333 @@
+{
+  "name": "whosOnFirst",
+  "script": [
+    {
+      "action": "say",
+      "who": "a",
+      "what": "So I heard they’re considering getting some more Cozmo robots to help us out on our shift",
+      "speed": 1,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Yes, I heard that too. However, I understand these Cozmo’s have funny names.",
+      "speed": 1,
+      "pitch": 1,
+      "human": false
+    },
+	{
+      "action": "say",
+      "who": "a",
+      "what": "Funny names?",
+      "speed": 0.5,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Yeah funny names.",
+      "speed": 0.5,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "Like what?",
+      "speed": 0.5,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Well take who for instance",
+      "speed": 0.5,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "The Cozmo",
+      "speed": 0.5,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Who",
+      "speed": 0.5,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "The robot",
+      "speed": 0.5,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Who",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "His name",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Who",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "The guy they're bringing in",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Who",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "His name",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Who",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "What's his name",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "They don't like what - they're not getting him",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "I'm not asking who they don't like",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "They love who",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "I don't know!",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Oh he's broken we're not talking about him",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "Why are we talking about a broken Cozmo?",
+      "speed": 0.5,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Because you mentioned his name",
+      "speed": 0.5,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "If I mentioned a broken Cozmo who did I say was broken?",
+      "speed": 0.5,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Who isn't broken?",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "I don't know",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "I don't know is broken",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "What",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "They don't like what",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "They don't like who",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "They love who",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "I don't know!",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "He's broken",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "I'll break you! You say you know the new robot names, right?",
+      "speed": 0.5,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "I’ll say I do",
+      "speed": 0.25,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "So a new Cozmo comes strolling in, and me being a nice guy, I want to greet him by name like I do for everybody, so I offer him a fist bump and I call him who?",
+      "speed": 0.5,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Now that’s the first thing you’ve said right",
+      "speed": 0.5,
+      "pitch": 1,
+      "human": false
+    },
+		{
+      "action": "say",
+      "who": "a",
+      "what": "I don’t even know what I’m talking about!!",
+      "speed": 0.5,
+      "pitch": 1,
+      "human": false
+    },
+    {
+      "action": "say",
+      "who": "b",
+      "what": "Just calm down, just calm down",
+      "speed": 0.5,
+      "pitch": 1,
+      "human": false
+    },
+	 {
+      "action": "say",
+      "who": "a",
+      "what": "I wish I was the dancing robot…",
+      "speed": 1,
+      "pitch": 1,
+      "human": false
+    },
+  ]
+}
