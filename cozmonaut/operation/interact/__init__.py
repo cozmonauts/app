@@ -20,9 +20,8 @@ from PIL import Image, ImageDraw
 
 from cozmonaut.operation import Operation
 from cozmonaut.operation.interact import database
-from cozmonaut.operation.interact.face_tracker import FaceTracker, DetectedFace, RecognizedFace
 from cozmonaut.operation.interact.service.convo import ServiceConvo
-from cozmonaut.operation.interact.service.face import ServiceFace
+from cozmonaut.operation.interact.service.face import DetectedFace, RecognizedFace, ServiceFace
 from cozmonaut.operation.interact.service.speech import ServiceSpeech
 
 
@@ -360,11 +359,11 @@ class OperationInteract(Operation):
                 loop=loop,
             )
 
-            print('Setting up face trackers')
+            print('Setting up face services')
 
-            # Create face trackers
-            self._face_tracker_a = FaceTracker()
-            self._face_tracker_b = FaceTracker()
+            # Create face services
+            self._service_face_a = ServiceFace()
+            self._service_face_b = ServiceFace()
 
             print('Loading known faces from database')
 
@@ -380,21 +379,21 @@ class OperationInteract(Operation):
                     # The result is a 128-tuple of 64-bit floats
                     ident = self._face_ident_decode(ident_enc)
 
-                    # Register identity with both face trackers
+                    # Register identity with both face services
                     # That way both Cozmos will be able to recognize the face
-                    self._face_tracker_a.add_identity(fid, ident)
-                    self._face_tracker_b.add_identity(fid, ident)
+                    self._service_face_a.add_identity(fid, ident)
+                    self._service_face_b.add_identity(fid, ident)
 
-            # Stop the face trackers
-            self._face_tracker_a.start()
-            self._face_tracker_b.start()
+            # Stop the face services
+            self._service_face_a.start()
+            self._service_face_b.start()
 
             # Run the event loop until it stops (it's not actually forever)
             loop.run_forever()
 
-            # Stop the face trackers
-            self._face_tracker_a.stop()
-            self._face_tracker_b.stop()
+            # Stop the face services
+            self._service_face_a.stop()
+            self._service_face_b.stop()
 
             print('Goodbye!')
         finally:
@@ -607,17 +606,17 @@ class OperationInteract(Operation):
         # The camera frame image
         image = evt.image
 
-        # The face tracker for this Cozmo robot
-        tracker: FaceTracker = None
+        # The face service for this Cozmo robot
+        face: ServiceFace = None
 
-        # Pick the corresponding face tracker
+        # Pick the corresponding face service
         if index == 1:
-            tracker = self._face_tracker_a
+            face = self._service_face_a
         elif index == 2:
-            tracker = self._face_tracker_b
+            face = self._service_face_b
 
-        # Update the Cozmo-corresponding tracker with the new camera frame
-        tracker.update(image)
+        # Update the Cozmo-corresponding face service with the new camera frame
+        face.update(image)
 
     async def _do_drive_from_charger_to_waypoint(self, index: int, robot: cozmo.robot.Robot):
         """
@@ -1275,15 +1274,15 @@ class OperationInteract(Operation):
         # Get the robot-specific services
         service_face = None
         service_speech = None
-        face_tracker = None
+        service_face = None
         if index == 1:
             service_face = self._service_face_a
             service_speech = self._service_speech_a
-            face_tracker = self._face_tracker_a
+            service_face = self._service_face_a
         elif index == 2:
             service_face = self._service_face_b
             service_speech = self._service_speech_b
-            face_tracker = self._face_tracker_b
+            service_face = self._service_face_b
 
         # Tilt the head upward to look for faces
         await robot.set_head_angle(cozmo.robot.MAX_HEAD_ANGLE).wait_for_completed()
@@ -1314,7 +1313,7 @@ class OperationInteract(Operation):
 
             # Submit a work order to detect a face (on a background thread)
             # Keeping it in concurrent future form will let us cancel it easily
-            face_det_future = face_tracker.next_track()
+            face_det_future = service_face.next_track()
 
             # While detection is not done
             while not face_det_future.done():
@@ -1361,11 +1360,11 @@ class OperationInteract(Operation):
             # TODO: Center on the face
 
             # Submit a work order to recognize the detected face (uses a background thread)
-            # The face tracker is holding onto the original picture of the detected face
+            # The face service is holding onto the original picture of the detected face
             # FIXME: This might actually be bad, as the detection is more lenient than recognition
             #  The detector might pick up a motion-blurred face, but then recognition might be bad
             #  This is not a priority for the group presentation, however, as we can control how fast we turn
-            face_rec: RecognizedFace = await asyncio.wrap_future(face_tracker.recognize(face_index))
+            face_rec: RecognizedFace = await asyncio.wrap_future(service_face.recognize(face_index))
 
             # The face ID
             # This corresponds to the ID assigned to the matched face identity during program startup
@@ -1402,11 +1401,11 @@ class OperationInteract(Operation):
                 # Insert face into the database and get the assigned face ID (thanks Herman, this is easy to use)
                 face_id = database.insertNewStudent(name, face_ident_enc)
 
-                # Add identity to both Cozmo A and B face trackers
+                # Add identity to both Cozmo A and B face services
                 # This lets us recognize this face again in the same session
                 # On subsequent sessions, we'll read from the database
-                self._face_tracker_a.add_identity(face_id, face_ident)
-                self._face_tracker_b.add_identity(face_id, face_ident)
+                self._service_face_a.add_identity(face_id, face_ident)
+                self._service_face_b.add_identity(face_id, face_ident)
 
                 # Repeat the name
                 num = random.randrange(3)
